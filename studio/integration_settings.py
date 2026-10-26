@@ -369,6 +369,18 @@ def test_groq(http=None, key_override=None):
         key=_get(GROQ_SECRET)
     return call_test(key,transport=http)
 
+def test_groq_chat(http=None,key_override=None):
+    """Live test is user-initiated only and uses the same key as the list test."""
+    from free_cloud_providers import test_groq_chat as call_test
+    if key_override is not None:
+        if not isinstance(key_override,str) or len(key_override)>4096:
+            raise ValueError("Định dạng Groq API key không hợp lệ")
+        key=key_override.strip() or _get(GROQ_SECRET)
+    else:
+        key=_get(GROQ_SECRET)
+    return call_test(key,transport=http)
+
+
 def test_claude(http=None):
     """Anthropic models.list is a read-only authentication and availability test."""
     key=_get(CLAUDE_SECRET)
