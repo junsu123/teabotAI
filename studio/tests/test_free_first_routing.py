@@ -162,6 +162,41 @@ class FreeFirstTests(unittest.TestCase):
         self.assertIn("gemini-3.8-flash",checked["supported_models"])
         self.assertFalse(settings.status()["gemini_key_configured"])
 
+    def test_live_groq_chat_distinguishes_models_403_and_chat_success(self):
+        # The models listing may fail while the chat-completions endpoint works.
+        # Do not silently consume tokens from the ordinary /models test.
+        def forbidden_list(req):
+            raise HTTPError(req.full_url,403,"Forbidden",hdrs=None,fp=BytesIO(b""))
+        with self.assertRaisesRegex(RuntimeError,"HTTP 403"):
+            settings.test_groq(http=forbidden_list,key_override="gsk-fake")
+        captured=[]
+        def ok_chat(req):
+            captured.append(req)
+            self.assertEqual(req.get_method(),"POST")
+            self.assertTrue(req.full_url.endswith("/chat/completions"))
+            self.assertEqual(req.get_header("Authorization"),"Bearer gsk-fake")
+            body=json.loads(req.data)
+            self.assertEqual(body["model"],"openai/gpt-oss-20b")
+            self.assertLessEqual(body["max_completion_tokens"],160)
+            self.assertEqual(len(body["messages"]),1)
+            return {"choices":[{"message":{"role":"assistant","content":"OK"}}]}
+        response=settings.test_groq_chat(http=ok_chat,key_override="gsk-fake")
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["sample"],"OK")
+        self.assertEqual(len(captured),1)
+        self.assertFalse(settings.status()["groq_key_configured"])
+
+    def test_live_groq_chat_403_reports_restriction(self):
+        def denied(req):
+            raise HTTPError(req.full_url,403,"Forbidden",hdrs=None,
+                            fp=BytesIO(b'{"error":{"type":"permissions_error"}}'))
+        with self.assertRaisesRegex(RuntimeError,"403"):
+            settings.test_groq_chat(http=denied,key_override="gsk-fake")
+
+    def test_live_groq_chat_no_key_never_calls_network(self):
+        with self.assertRaisesRegex(ValueError,"API key"):
+            settings.test_groq_chat(http=lambda req:self.fail("Never call network"))
+
     def test_unsaved_groq_key_and_permissions(self):
         # The test button must work before the Save button.
         def read_models(request):
