@@ -66,7 +66,7 @@ def provider_for(agent, env=None):
     # GUI provider selection overrides old OPENAI_AGENT environment conventions.
     explicit=(env.get("TEA_AGENT_PROVIDER_"+agent.upper()) or "").strip().lower()
     if explicit:
-        if explicit not in {"claude","openai","ollama"}:
+        if explicit not in {"auto","gemini","groq","claude","openai","ollama"}:
             raise ValueError("Nhà cung cấp AI không hợp lệ cho "+agent)
         return explicit
     return "openai" if agent in enabled_agents(env) else "ollama"
@@ -168,11 +168,26 @@ def _openai_chat(agent, prompt, db_file, env=None, transport=None):
             (at[:7],agent,model,input_tokens,output_tokens,estimated,at))
     return answer
 
-def chat(agent, prompt, local_chat, db_file, env=None, transport=None):
-    env = os.environ if env is None else env
-    provider=provider_for(agent,env)
+def _priority(env):
+    allowed=("gemini","groq","claude","openai","ollama")
+    raw=env.get("TEA_PROVIDER_PRIORITY",",".join(allowed))
+    items=[x.strip() for x in raw.split(",")]
+    if len(items)!=len(allowed) or set(items)!=set(allowed):
+        return allowed
+    return tuple(items)
+
+
+def _call_provider(provider,agent,prompt,local_chat,db_file,env,transport=None):
     if provider=="ollama":
-        return local_chat(agent, VIETNAMESE_RULES+"\n\n"+prompt)
+        return local_chat(agent, VIETNAMESE_RULES+"\\n\\n"+prompt)
+    if provider=="gemini" or provider=="groq":
+        import free_cloud_providers as cloud
+        key=env.get("GEMINI_API_KEY","") if provider=="gemini" else env.get("GROQ_API_KEY","")
+        if provider=="gemini":
+            model=env.get("TEA_GEMINI_MODEL_"+agent.upper(),cloud.GEMINI_DEFAULT[agent])
+            return cloud.gemini_chat(agent,prompt,key=key,model=model,transport=transport)
+        model=env.get("TEA_GROQ_MODEL_"+agent.upper(),cloud.GROQ_DEFAULT[agent])
+        return cloud.groq_chat(agent,prompt,key=key,model=model,transport=transport)
     if provider=="claude":
         import claude_provider
         model=env.get("TEA_CLAUDE_MODEL_"+agent.upper(),claude_provider.DEFAULT_MODELS[agent])
@@ -180,28 +195,91 @@ def chat(agent, prompt, local_chat, db_file, env=None, transport=None):
             Path(db_file).with_name("claude_usage.sqlite3"),
             key=env.get("ANTHROPIC_API_KEY",""),model=model,
             limit_usd=env.get("TEA_CLAUDE_MONTHLY_LIMIT_USD","12"),transport=transport)
-    return _openai_chat(agent,prompt,db_file,env=env,transport=transport)
+    if provider=="openai":
+        return _openai_chat(agent,prompt,db_file,env=env,transport=transport)
+    raise ValueError("Nhà cung cấp AI không hợp lệ")
+
+
+def _available(provider,env):
+    secrets={"gemini":"GEMINI_API_KEY","groq":"GROQ_API_KEY",
+             "claude":"ANTHROPIC_API_KEY","openai":"OPENAI_API_KEY"}
+    if provider=="ollama":return True
+    return bool(env.get(secrets[provider]))
+
+
+def _record_actual_provider(db_file,agent,provider):
+    with sqlite3.connect(Path(db_file),timeout=15) as con:
+        con.execute("""CREATE TABLE IF NOT EXISTS model_routes(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,agent TEXT NOT NULL,
+            provider TEXT NOT NULL,created_at TEXT NOT NULL)""")
+        con.execute("INSERT INTO model_routes(agent,provider,created_at) VALUES(?,?,datetime('now'))",
+                    (agent,provider))
+
+
+def chat(agent, prompt, local_chat, db_file, env=None, transport=None):
+    env=os.environ if env is None else env
+    selected=provider_for(agent,env)
+    if selected!="auto":
+        result=_call_provider(selected,agent,prompt,local_chat,db_file,env,transport)
+        _record_actual_provider(db_file,agent,selected)
+        return result
+    # Free-first auto routing: Gemini → Groq → Ollama.
+    # Claude/OpenAI are included only with user's explicit paid-fallback opt-in.
+    order=_priority(env)
+    paid_allowed=env.get("TEA_ALLOW_PAID_FALLBACK","0")=="1"
+    errors=[]
+    for provider in order:
+        if provider in ("claude","openai") and not paid_allowed:
+            continue
+        if not _available(provider,env):
+            continue
+        try:
+            result=_call_provider(provider,agent,prompt,local_chat,db_file,env,transport)
+            _record_actual_provider(db_file,agent,provider)
+            return result
+        except Exception as err:
+            import free_cloud_providers as cloud
+            # Fallback ONLY if a provider is temporarily unavailable.
+            # Credential/permissions errors are surfaced rather than hidden.
+            if isinstance(err,cloud.TemporaryProviderError):
+                errors.append(provider+": tạm thời không sẵn sàng")
+                continue
+            raise
+    raise RuntimeError("Không nhà cung cấp AI nào phản hồi được trong tuyến ưu tiên. "+
+                       "; ".join(errors)[:450])
+
 
 def configuration_status(env=None):
-    env = os.environ if env is None else env
+    env=os.environ if env is None else env
     import claude_provider
+    import free_cloud_providers as cloud
     routes={}
+    order=_priority(env)
     for agent in sorted(VALID_AGENTS):
         provider=provider_for(agent,env)
         if provider=="claude":
-            routes[agent]={"provider":"claude","model":env.get(
-                "TEA_CLAUDE_MODEL_"+agent.upper(),claude_provider.DEFAULT_MODELS[agent])}
+            model=env.get("TEA_CLAUDE_MODEL_"+agent.upper(),claude_provider.DEFAULT_MODELS[agent])
         elif provider=="openai":
-            routes[agent]={"provider":"openai","model":model_for(agent,env)}
-        else:
-            routes[agent]={"provider":"ollama"}
-    return {
-        "language":"vi",
-        "openai_agents":[a for a,p in routes.items() if p["provider"]=="openai"],
-        "claude_agents":[a for a,p in routes.items() if p["provider"]=="claude"],
-        "routes":routes,
-        "openai_key_configured":bool(env.get("OPENAI_API_KEY")),
-        "claude_key_configured":bool(env.get("ANTHROPIC_API_KEY")),
-        "monthly_limit_usd":_maximum_budget(env),
-        "claude_monthly_limit_usd":float(env.get("TEA_CLAUDE_MONTHLY_LIMIT_USD","12")),
-    }
+            model=model_for(agent,env)
+        elif provider=="gemini":
+            model=env.get("TEA_GEMINI_MODEL_"+agent.upper(),cloud.GEMINI_DEFAULT[agent])
+        elif provider=="groq":
+            model=env.get("TEA_GROQ_MODEL_"+agent.upper(),cloud.GROQ_DEFAULT[agent])
+        elif provider=="auto":
+            model=" → ".join(p for p in order if p not in ("claude","openai")
+                           or env.get("TEA_ALLOW_PAID_FALLBACK")=="1")
+        else:model=""
+        routes[agent]={"provider":provider,"model":model}
+    return {"language":"vi",
+       "priority":list(order),
+       "allow_paid_fallback":env.get("TEA_ALLOW_PAID_FALLBACK","0")=="1",
+       "openai_agents":[a for a,x in routes.items() if x["provider"]=="openai"],
+       "claude_agents":[a for a,x in routes.items() if x["provider"]=="claude"],
+       "auto_agents":[a for a,x in routes.items() if x["provider"]=="auto"],
+       "routes":routes,
+       "gemini_key_configured":bool(env.get("GEMINI_API_KEY")),
+       "groq_key_configured":bool(env.get("GROQ_API_KEY")),
+       "openai_key_configured":bool(env.get("OPENAI_API_KEY")),
+       "claude_key_configured":bool(env.get("ANTHROPIC_API_KEY")),
+       "monthly_limit_usd":_maximum_budget(env),
+       "claude_monthly_limit_usd":float(env.get("TEA_CLAUDE_MONTHLY_LIMIT_USD","12"))}
