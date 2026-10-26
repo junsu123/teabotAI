@@ -39,9 +39,19 @@ def main():
 
     token=os.environ.get('TEA_TELEGRAM_TOKEN','')
     owners={int(x.strip()) for x in os.environ.get('TEA_TELEGRAM_ALLOWED_IDS','').split(',') if x.strip().isdigit()}
-    if not token or not owners:
-        raise SystemExit('Cần TEA_TELEGRAM_TOKEN và TEA_TELEGRAM_ALLOWED_IDS; bot không mở công khai.')
+    if not token:
+        raise SystemExit('Chưa có Telegram Bot Token. Vào Mars Studio → Cài đặt ChatGPT & Telegram.')
+    # No configured owners: only /myid is available for safe onboarding.
+    # All other commands use gate() and remain forbidden.
     initialize()
+
+    async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+        if update.effective_message and user:
+            await update.effective_message.reply_text(
+                f'Telegram User ID của bạn là: {user.id}\\n'
+                'Quay lại Mars Studio, điền ID này trong danh sách được phép, '
+                'lưu và bật lại Bot để sử dụng các lệnh khác.')
 
     async def gate(update):
         user=update.effective_user
@@ -134,6 +144,7 @@ def main():
             await update.message.reply_text('Lỗi: '+str(exc))
 
     app=ApplicationBuilder().token(token).build()
+    app.add_handler(CommandHandler('myid',myid))
     app.add_handler(CommandHandler('start',start))
     app.add_handler(CommandHandler('help',start))
     for cmd in ('approve','reject','status'):
