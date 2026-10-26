@@ -44,6 +44,46 @@ class FreeFirstTests(unittest.TestCase):
             "groq_models":{"ceo":"openai/gpt-oss-120b"},
         })
 
+    def test_free_mode_is_default_and_rejects_paid_selection(self):
+        self.assertTrue(settings.status()["free_only"])
+        with self.assertRaisesRegex(ValueError,"CHỈ MODEL"):
+            settings.save_ai_providers({"agent_providers":{"ceo":"claude"}})
+        with self.assertRaisesRegex(ValueError,"CHỈ MODEL"):
+            settings.save_ai_providers({"agent_providers":{"ceo":"auto"},
+                                        "allow_paid_fallback":True})
+        self.assertTrue(settings.status()["free_only"])
+
+    def test_free_only_blocks_paid_keys_even_from_legacy_config(self):
+        self.setup_free()
+        env=settings.openai_env({})
+        env.update({"TEA_AGENT_PROVIDER_CEO":"openai","OPENAI_API_KEY":"fake",
+                    "TEA_ALLOW_PAID_FALLBACK":"1"})
+        with self.assertRaisesRegex(RuntimeError,"CHỈ MODEL"):
+            model_router.chat("ceo","Kiểm tra",
+                lambda a,p:self.fail("Not local"),self.db,
+                env=env,transport=lambda req:self.fail("Paid request not permitted"))
+
+    def test_free_only_autorouting_never_uses_paid_provider(self):
+        self.setup_free()
+        env=settings.openai_env({})
+        env["TEA_ALLOW_PAID_FALLBACK"]="1"
+        env["ANTHROPIC_API_KEY"]="fake-paid"
+        env["OPENAI_API_KEY"]="fake-paid"
+        seen=[]
+        def fail_cloud(req):
+            seen.append(req.full_url)
+            raise HTTPError(req.full_url,429,"Slow",hdrs=None,fp=None)
+        result=model_router.chat("ceo","Bản nháp",lambda a,p:"Phản hồi Ollama",
+            self.db,env=env,transport=fail_cloud)
+        self.assertEqual(result,"Phản hồi Ollama")
+        self.assertEqual(len(seen),2)
+
+    def test_only_free_tier_eligible_models_in_lists(self):
+        self.assertIn("gemini-3.8-flash",cloud.GEMINI_FREE_TIER_MODELS)
+        self.assertIn("gemini-2.5-flash-lite",cloud.GEMINI_FREE_TIER_MODELS)
+        self.assertIn("openai/gpt-oss-120b",cloud.GROQ_FREE_TIER_MODELS)
+        self.assertNotIn("claude-sonnet-4-6",cloud.GEMINI_FREE_TIER_MODELS)
+
     def test_gui_settings_and_secrets_not_on_disk(self):
         result=self.setup_free()
         self.assertTrue(result["gemini_key_configured"])
