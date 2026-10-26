@@ -169,16 +169,16 @@ def work_once(db_path, chat, get_products):
                 raise
             step(db_path,mid,agent,"done",result=answer)
             agent_forum.record(db_path,mid,agent,"ceo","proposal",answer)
-            outputs.append(f"=== {agent.upper()} ===\\n{answer[:5500]}")
-        proposals = {agent: outputs[i].split("\\n",1)[-1] for i,agent in enumerate(agents)}
+            outputs.append(f"=== {agent.upper()} ===\n{answer[:5500]}")
+        proposals = {agent: outputs[i].split("\n",1)[-1] for i,agent in enumerate(agents)}
         try:
             dialog = agent_forum.debate(db_path,mid,chat,agents,proposals,
-                                        req+"\\nThông tin sản phẩm:\\n"+facts)
+                                        req+"\nThông tin sản phẩm:\n"+facts)
         except Exception as error:
             agent_forum.record(db_path,mid,"system","ceo","error",
                   "Phiên trao đổi bị gián đoạn: "+str(error)[:900])
             raise
-        discussion_text="\\n".join(
+        discussion_text="\n".join(
              f"[{x['sender']} → {x['recipient']}; {x['kind']}] {x['body'][:1400]}"
              for x in dialog)[:6500]
         agent_forum.record(db_path,mid,"ceo","ceo","assignment",
@@ -192,7 +192,7 @@ def work_once(db_path, chat, get_products):
             "Tổng hợp nhiệm vụ, kết quả thực chất, phần chưa xác minh, rủi ro và việc cần duyệt. "
             "Không nói đã đăng hàng hay chạy quảng cáo nếu không có bằng chứng. "
             "Không giao nhiệm vụ cho chủ làm thay agent, ngoại trừ xác thực/phê duyệt quan trọng.\n"
-            +req+"\\n"+"\\n".join(outputs)[:9500]+"\\nTRAO ĐỔI NỘI BỘ:\\n"+discussion_text
+            +req+"\n"+"\n".join(outputs)[:9500]+"\nTRAO ĐỔI NỘI BỘ:\n"+discussion_text
         )
         set_report(db_path,mid,plan=json.dumps({'agents':agents,'reason':reason,'phase':'CEO đang tổng hợp báo cáo'},ensure_ascii=False))
         report=chat("ceo",report_prompt)
