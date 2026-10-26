@@ -220,7 +220,7 @@ function aiSettingsSection(){
  <div class="integration-input-wrap"><input id="geminiApiKeyInput" name="gemini_api_key" type="password" autocomplete="new-password" spellcheck="false"
  placeholder="${cfg.gemini_key_configured?'Khóa đã lưu · để trống nếu không đổi':'Dán Gemini API key tại đây'}">
  <button type="button" class="integration-show-btn" onclick="toggleIntegrationKey('geminiApiKeyInput',this)" aria-label="Hiện hoặc ẩn Gemini API key">Hiện</button></div>
- <div class="integration-key-helper">${cfg.gemini_key_configured?'Khóa đang nằm trong kho mật khẩu Windows.':'Có thể kiểm tra trước khi lưu khóa.'}
+ <div class="integration-key-helper">${cfg.gemini_key_configured?'Đã lưu trong database SQLite mã hóa trên máy.':'Có thể kiểm tra trước khi lưu khóa.'}
  <a href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">Lấy API key</a></div>
  <div class="integration-key-actions"><button type="button" class="small-btn" onclick="testConnection('gemini')">✓ Kiểm tra Gemini</button>
  ${cfg.gemini_key_configured?'<button type="button" class="integration-danger" onclick="removeIntegrationSecret(\'gemini\')">Xóa khóa</button>':''}</div>
@@ -233,7 +233,7 @@ function aiSettingsSection(){
  <div class="integration-input-wrap"><input id="groqApiKeyInput" name="groq_api_key" type="password" autocomplete="new-password" spellcheck="false"
  placeholder="${cfg.groq_key_configured?'Khóa đã lưu · để trống nếu không đổi':'Dán Groq API key tại đây'}">
  <button type="button" class="integration-show-btn" onclick="toggleIntegrationKey('groqApiKeyInput',this)" aria-label="Hiện hoặc ẩn Groq API key">Hiện</button></div>
- <div class="integration-key-helper">${cfg.groq_key_configured?'Khóa đang nằm trong kho mật khẩu Windows.':'Có thể kiểm tra trước khi lưu khóa.'}
+ <div class="integration-key-helper">${cfg.groq_key_configured?'Đã lưu trong database SQLite mã hóa trên máy.':'Có thể kiểm tra trước khi lưu khóa.'}
  <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Lấy API key</a></div>
  <div class="integration-key-actions"><button type="button" class="small-btn" onclick="testConnection('groq')">✓ Kiểm tra Groq</button>
  <button type="button" class="small-btn" onclick="testGroqChat()">Thử trực tiếp GPT-OSS-20B</button>
@@ -272,16 +272,18 @@ function aiSettingsSection(){
  </select></div></div></details></article>`}).join('')}</div></details>
  <details class="integration-expander">
  <summary>⚙ API trả phí và tùy chọn nâng cao <small>Claude · OpenAI · Ngân sách</small></summary>
- <p class="tagline">Chỉ sử dụng khi bạn chủ động tắt chế độ miễn phí. Các khóa được lưu an toàn trên Windows.</p>
+ <p class="tagline">Chỉ sử dụng khi bạn chủ động tắt chế độ miễn phí. Các khóa được mã hóa trong database SQLite cục bộ.</p>
  <label class="checkbox-line"><input type="checkbox" name="allow_paid_fallback" ${cfg.allow_paid_fallback?'checked':''} ${cfg.free_only!==false?'disabled':''}> Cho phép tự dự phòng sang Claude/OpenAI trả phí</label>
  <div class="integration-paid-grid"><div class="field"><label>Claude API Key (Anthropic)</label>
- <input type="password" name="claude_api_key" autocomplete="new-password" placeholder="${cfg.claude_key_configured?'Đã lưu khóa Claude – để trống nếu không thay đổi':'Nhập Claude API key tại đây'}">
- <small>${cfg.claude_key_configured?'✓ Đã lưu Claude API key trong Windows':'Chưa cấu hình Claude API key'}</small></div>
+ <input id="claudeApiKeyInput" type="password" name="claude_api_key" autocomplete="new-password" placeholder="${cfg.claude_key_configured?'Đã lưu khóa Claude – để trống nếu không thay đổi':'Nhập Claude API key tại đây'}">
+ <small>${cfg.claude_key_configured?'✓ Đã lưu API key trong database mã hóa':'Chưa cấu hình Claude API key'}</small>
+ <button class="integration-show-btn" type="button" onclick="toggleIntegrationKey('claudeApiKeyInput',this)">Hiện</button></div>
  <div class="field"><label>Ngân sách Claude tháng (USD, chỉ là giới hạn ước tính cục bộ)</label>
  <input name="claude_monthly_limit_usd" type="number" min="0.5" max="1000" step="0.5" value="${Number(cfg.claude_monthly_limit_usd||12)}"></div>
  <div class="field"><label>OpenAI API key – chỉ dùng khi bạn chọn OpenAI</label>
- <input type="password" name="openai_api_key" autocomplete="new-password" placeholder="${cfg.openai_key_configured?'Đã lưu khóa OpenAI – để trống nếu không đổi':'Không bắt buộc khi chỉ dùng Claude'}">
- <small>${cfg.openai_key_configured?'✓ Đã lưu OpenAI key':'Chưa lưu OpenAI key'}</small></div>
+ <input id="openaiApiKeyInput" type="password" name="openai_api_key" autocomplete="new-password" placeholder="${cfg.openai_key_configured?'Đã lưu khóa OpenAI – để trống nếu không đổi':'Không bắt buộc khi chỉ dùng Claude'}">
+ <small>${cfg.openai_key_configured?'✓ Đã lưu API key trong database mã hóa':'Chưa lưu OpenAI key'}</small>
+ <button class="integration-show-btn" type="button" onclick="toggleIntegrationKey('openaiApiKeyInput',this)">Hiện</button></div>
  <div class="field"><label>Ngân sách OpenAI tháng (USD)</label>
  <input name="monthly_limit_usd" type="number" min="0.5" max="1000" step="0.5" value="${Number(cfg.monthly_limit_usd||12)}"></div>
 </div>
@@ -300,10 +302,60 @@ function aiSettingsSection(){
  </div>
  </form> </section>`;
 }
-function toggleIntegrationKey(id,button){
+function storedKeyProvider(id){
+ return ({geminiApiKeyInput:'gemini',groqApiKeyInput:'groq',
+          claudeApiKeyInput:'claude',openaiApiKeyInput:'openai',
+          telegramBotTokenInput:'telegram'})[id]||null;
+}
+function keyValueForSave(field){
+ const input=$('#'+field);
+ return input?.dataset?.savedReveal==='1'?'':(input?.value||'');
+}
+function hideStoredKey(input,button){
+ input.type='password';
+ if(input.dataset.savedReveal==='1'){
+   input.value='';input.readOnly=false;
+   delete input.dataset.savedReveal;
+ }
+ button.textContent='Hiện';
+ button.setAttribute('aria-pressed','false');
+}
+async function toggleIntegrationKey(id,button){
  const input=document.getElementById(id);if(!input)return;
- const reveal=input.type==='password';input.type=reveal?'text':'password';
- button.textContent=reveal?'Ẩn':'Hiện';button.setAttribute('aria-pressed',String(reveal));
+ if(input.type==='text'){
+  hideStoredKey(input,button);return;
+ }
+ // Unsaved user-entered keys are revealed locally, without an API request.
+ if(input.value&&input.dataset.savedReveal!=='1'){
+  input.type='text';button.textContent='Ẩn';
+  button.setAttribute('aria-pressed','true');return;
+ }
+ const provider=storedKeyProvider(id);
+ if(!provider){toast('Trường khóa không hợp lệ',true);return;}
+ if(!confirm('Hiện API key/token đã lưu trên màn hình? Hãy bảo đảm không có người khác đang xem màn hình của bạn.'))return;
+ button.disabled=true;button.textContent='Đang đọc...';
+ try{
+  const response=await fetch('/api/settings/secret/reveal',{
+    method:'POST',credentials:'same-origin',cache:'no-store',
+    headers:{'Content-Type':'application/json','X-Requested-With':'Tea-Mars-UI'},
+    body:JSON.stringify({provider,confirm_reveal:true})
+  });
+  const result=await response.json();
+  if(!response.ok||!result.ok)throw Error(result.error||'Không thể đọc khóa đã lưu');
+  input.value=result.secret;
+  input.dataset.savedReveal='1';
+  input.readOnly=true; // Hide first before editing or replacing a stored key.
+  input.type='text';button.textContent='Ẩn';
+  button.setAttribute('aria-pressed','true');
+  // Reveal is transient. Never keep decrypted keys in visible input indefinitely.
+  setTimeout(()=>{
+   if(input.dataset.savedReveal==='1'&&input.type==='text')
+    hideStoredKey(input,button);
+  },60000);
+ }catch(err){
+  toast('Không xem được khóa: '+err.message,true);
+  button.textContent='Hiện';
+ }finally{button.disabled=false;}
 }
 function updateFreeOnlyControls(){
  const form=$('#aiSettingsForm');if(!form)return;
@@ -359,9 +411,10 @@ function telegramSettingsSection(){
  <p class="tagline">Lưu token, ID người được phép và điều khiển Bot bằng nút trên giao diện.</p>
  <form id="telegramSettingsForm" onsubmit="saveTelegramSettings(event)">
  <div class="field"><label>Bot Token (tạo bằng @BotFather)</label>
- <input type="password" name="bot_token" autocomplete="new-password"
+ <input id="telegramBotTokenInput" type="password" name="bot_token" autocomplete="new-password"
  placeholder="${cfg.telegram_token_configured?'Đã lưu token – để trống để giữ nguyên':'Dán bot token ở đây'}">
- <small>${cfg.telegram_token_configured?'✓ Có token được lưu trong Windows':'Chưa lưu Telegram Bot Token'}</small></div>
+ <small>${cfg.telegram_token_configured?'✓ Đã lưu token mã hóa trong database':'Chưa lưu Telegram Bot Token'}</small>
+ <button type="button" class="integration-show-btn" onclick="toggleIntegrationKey('telegramBotTokenInput',this)">Hiện</button></div>
  <div class="field"><label>Telegram User ID được phép (phân cách bằng dấu phẩy)</label>
  <input name="telegram_allowed_ids" value="${h((cfg.telegram_allowed_ids||[]).join(','))}" placeholder="Ví dụ: 123456789 (để trống để lấy ID qua /myid)">
  <small>Chưa biết User ID? Lưu token trước, bấm Bật Bot, mở Telegram nhắn <b>/myid</b> cho bot để lấy ID. Sau đó Tắt Bot → nhập ID → Lưu → Bật lại. Khi chưa có ID, các lệnh khác đều bị chặn.</small></div>
@@ -406,8 +459,8 @@ async function saveAISettings(event){
  event.preventDefault();
  const e=new FormData(event.target),roles=['ceo','strategy','compliance','research','creative','analyst'];
  const payload={
-  gemini_api_key:e.get('gemini_api_key')||'',groq_api_key:e.get('groq_api_key')||'',
-  claude_api_key:e.get('claude_api_key')||'',openai_api_key:e.get('openai_api_key')||'',
+  gemini_api_key:keyValueForSave('geminiApiKeyInput'),groq_api_key:keyValueForSave('groqApiKeyInput'),
+  claude_api_key:keyValueForSave('claudeApiKeyInput'),openai_api_key:keyValueForSave('openaiApiKeyInput'),
   free_only:e.get('free_only')==='on',
   allow_paid_fallback:e.get('allow_paid_fallback')==='on',
   provider_priority:['gemini','groq','claude','openai','ollama'],
@@ -435,7 +488,7 @@ async function saveAISettings(event){
 async function saveTelegramSettings(event){
  event.preventDefault();
  const form=event.target,e=new FormData(form);
- const payload={bot_token:e.get('bot_token')||'',telegram_allowed_ids:e.get('telegram_allowed_ids')||'',
+ const payload={bot_token:keyValueForSave('telegramBotTokenInput'),telegram_allowed_ids:e.get('telegram_allowed_ids')||'',
  telegram_autostart:e.get('telegram_autostart')==='on'};
  try{const r=await api('settings/telegram',payload);toast(r.message||'Đã lưu Telegram');await refresh()}
  catch(err){toast(err.message,true)}
