@@ -5,7 +5,7 @@ let data={agents:[],accounts:[],jobs:[],missions:[],learnings:[],products:{},pro
 let forumMissionId=0,forumData=null,forumBusy=false;
 const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt AI & Telegram',dom:'Học đăng bài'};
 async function api(endpoint, body=null){
- const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:endpoint.endsWith('/test-chat')?30000:endpoint.endsWith('/test')?20000:12000);
+ const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:endpoint.endsWith('/test-saved-agent')?55000:endpoint.endsWith('/test-chat')?30000:endpoint.endsWith('/test')?20000:12000);
  const opts=body===null?{signal:ctrl.signal}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal};
  try{
   const response=await fetch('/api/'+endpoint,opts);
