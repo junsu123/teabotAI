@@ -256,7 +256,7 @@ class Handler(BaseHTTPRequestHandler):
     return json_reply(self,{'ok':True,'settings':settings,
         'message':'Đã lưu nhà cung cấp và mô hình AI cho từng vị trí.'})
    if path=='/api/settings/gemini/test':
-    return json_reply(self,integration_settings.test_gemini())
+    return json_reply(self,integration_settings.test_gemini(key_override=body.get('api_key')))
    if path=='/api/settings/groq/test':
     return json_reply(self,integration_settings.test_groq(key_override=body.get('api_key')))
    if path=='/api/settings/gemini/remove-key':
