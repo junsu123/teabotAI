@@ -158,8 +158,10 @@ def _safe_protected_url(platform, url):
     if not _protected_page(platform, url):
         return ""
     p = urlparse(url)
-    # Never save URL query, fragment, credentials or any session-bearing string.
-    if p.username or p.password or p.query or p.fragment or p.path.startswith("//"):
+    # Strip all query and fragment values; persist only a safe path.
+    if p.username or p.password or p.path.startswith("//"):
+        return ""
+    if any(x in p.path.lower().split("/") for x in ("callback", "oauth", "authorize")):
         return ""
     return f"https://{official_host(platform)}{p.path}"
 
