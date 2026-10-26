@@ -363,6 +363,10 @@ class Handler(BaseHTTPRequestHandler):
   except Exception as e:
    return error_reply(self,500,f'Lỗi nội bộ: {type(e).__name__}')
 
+def ceo_chat(agent,prompt):
+ # Bounded CPU work: show a useful error instead of waiting silently for 3+ minutes per agent.
+ return legacy_ai.chat(agent,prompt,timeout_seconds=100,max_output_tokens=520)
+
 def main():
  import argparse
  parser=argparse.ArgumentParser()
@@ -373,11 +377,13 @@ def main():
  init()
  stop_event=threading.Event()
  worker=threading.Thread(target=ceo_engine.worker_loop,
-     args=(DB,legacy_ai.chat,list_products,stop_event),daemon=True,name='AI-CEO-Worker')
+     args=(DB,ceo_chat,list_products,stop_event),daemon=True,name='AI-CEO-Worker')
  url=f'http://127.0.0.1:{args.port}'
  server=ThreadingHTTPServer(('127.0.0.1',args.port),Handler)
  # Bring up the dashboard before CPU-heavy local model inference begins.
- threading.Timer(3.0,worker.start).start()
+ timer=threading.Timer(3.0,worker.start)
+ timer.daemon=True
+ timer.start()
  print(f'TEA AI MARS STUDIO: {url}\nDữ liệu nội bộ: {DB}\nNhấn Ctrl+C để dừng.')
  if not args.no_browser:threading.Timer(0.6,lambda:webbrowser.open(url)).start()
  try:server.serve_forever()
