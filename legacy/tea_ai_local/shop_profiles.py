@@ -258,32 +258,29 @@ def scan_local_html(html_path: str | Path, account_id: str, mode: str) -> Path:
 def check_account_once(account_id: str, proxy_env: dict | None = None) -> dict:
     """User-requested, visible browser read-only session check for a closed profile."""
     from playwright.sync_api import sync_playwright
-    from session_monitor import inspect_and_save, write_status, read_status
+    from session_monitor import write_status, read_status, verify_in_separate_tab
     account = get_account(account_id)
     folder = PROFILES / account_id
     lock = folder / '.tea_ai_in_use'
     if lock.exists():
-        # interactive_open monitors and writes the same status every few seconds.
-        old = read_status(folder)
-        return {**old, 'message': 'Chrome profile đang mở. Đang theo dõi trạng thái trong cửa sổ đăng nhập.'}
-    write_status(folder, 'checking', 0, 'Đang mở trình duyệt để kiểm tra phiên đăng nhập...')
+        # The original browser process owns the profile. Never open it twice.
+        (folder / 'check_login.request').touch()
+        return {**read_status(folder), 'message': 'Đã yêu cầu Chrome đang mở kiểm tra bằng trang quản trị.'}
+    write_status(folder, 'checking', message='Đang mở trang quản trị đã xác minh...')
     try:
         with sync_playwright() as playwright:
             with account_context(playwright, account_id, proxy_env=proxy_env) as context:
-                page = context.pages[0] if context.pages else context.new_page()
-                page.goto(account['start_url'], wait_until='domcontentloaded', timeout=30000)
-                page.wait_for_timeout(2500)
-                return inspect_and_save(context, account, folder)
+                return verify_in_separate_tab(context, account, folder)
     except Exception as exc:
-        msg = f'Không thể kiểm tra phiên đăng nhập: {type(exc).__name__}. Đóng profile, kiểm tra mạng/proxy và thử lại.'
-        write_status(folder, 'error', 0, msg)
+        msg = f'Không thể kiểm tra trạng thái: {type(exc).__name__}. Đóng profile, kiểm tra mạng/proxy rồi thử lại.'
+        write_status(folder, 'error', message=msg)
         return read_status(folder)
 
 
 def interactive_open(account_id: str) -> None:
     """Manual login; automatically inspect status, without exporting cookies."""
     from playwright.sync_api import sync_playwright
-    from session_monitor import inspect_and_save, write_status
+    from session_monitor import inspect_and_save, write_status, verify_in_separate_tab, PROBE_REQUEST
     account = get_account(account_id)
     folder = PROFILES / account_id
     with sync_playwright() as playwright:
@@ -301,12 +298,16 @@ def interactive_open(account_id: str) -> None:
                 if not alive:
                     break
                 try:
-                    inspect_and_save(context, account, folder)
+                    requested = folder / PROBE_REQUEST
+                    if requested.exists():
+                        requested.unlink(missing_ok=True)
+                        verify_in_separate_tab(context, account, folder)
+                    else:
+                        inspect_and_save(context, account, folder)
                 except Exception as exc:
-                    write_status(folder, 'error', 0,
-                                 f'Không thể đọc trạng thái: {type(exc).__name__}; đang thử lại.')
+                    write_status(folder, 'error',
+                                 message=f'Không thể đọc trạng thái: {type(exc).__name__}; đang thử lại.')
                 try:
-                    # Continue monitoring even across normal page navigations.
                     alive[0].wait_for_timeout(5000)
                 except Exception:
                     import time
