@@ -258,7 +258,7 @@ class Handler(BaseHTTPRequestHandler):
    if path=='/api/settings/gemini/test':
     return json_reply(self,integration_settings.test_gemini())
    if path=='/api/settings/groq/test':
-    return json_reply(self,integration_settings.test_groq())
+    return json_reply(self,integration_settings.test_groq(key_override=body.get('api_key')))
    if path=='/api/settings/gemini/remove-key':
     return json_reply(self,{'ok':True,'settings':integration_settings.remove_gemini_key(),
       'message':'Đã xóa Gemini API key. Tuyến tự động vẫn có Groq dự phòng.'})
