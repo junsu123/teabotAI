@@ -51,6 +51,11 @@ def setup(path):
         if "veo_template" not in existing:
             c.execute("ALTER TABLE mission_product_briefs ADD COLUMN veo_template TEXT NOT NULL DEFAULT ''")
     commerce_content.setup(path)
+    # Older product missions predate separate SEO/pricing deliverable rows.
+    # They receive empty fields without changing their existing work.
+    with db(path) as c:
+        c.execute("""INSERT OR IGNORE INTO commerce_outputs(mission_id,updated_at)
+                    SELECT mission_id,? FROM mission_product_briefs""",(now(),))
 
 
 def field(value,title,limit,required=False):
