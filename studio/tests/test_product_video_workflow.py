@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 STUDIO=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(STUDIO))
@@ -25,8 +26,12 @@ class ProductVideoWorkflowTests(unittest.TestCase):
               detail TEXT DEFAULT '',status TEXT DEFAULT 'pending',
               created_at TEXT NOT NULL,updated_at TEXT NOT NULL)""")
         ceo_engine.setup(self.db)
+        self.metadata_patch=patch.object(pv,"public_tiktok_metadata",
+            side_effect=lambda urls:[{"url":u,"status":"unavailable","title":"","author":""} for u in urls])
+        self.metadata_patch.start()
 
     def tearDown(self):
+        self.metadata_patch.stop()
         self.tmp.cleanup()
 
     def payload(self):
@@ -104,6 +109,21 @@ class ProductVideoWorkflowTests(unittest.TestCase):
         room=pv.production(self.db,mid)
         self.assertEqual(room["status"],"needs_review")
         self.assertFalse(room["storyboard"])
+
+    def test_tiktok_oembed_public_metadata_is_limited(self):
+        self.metadata_patch.stop()
+        try:
+            def fake(endpoint):
+                self.assertTrue(endpoint.startswith("https://www.tiktok.com/oembed?"))
+                return {"title":"Giới thiệu trà", "author_name":"Người sáng tạo"}
+            result=pv.public_tiktok_metadata(
+                ["https://www.tiktok.com/@example/video/76543210"],fetch_json=fake)
+            self.assertEqual(result[0]["status"],"public_metadata_only")
+            self.assertEqual(result[0]["title"],"Giới thiệu trà")
+            self.assertEqual(result[0]["author"],"Người sáng tạo")
+            self.assertNotIn("transcript",result[0])
+        finally:
+            self.metadata_patch.start()
 
     def test_missing_compliance_json_does_not_autohandoff(self):
         self.assertFalse(pv.compliance_ok("Nội dung đã kiểm duyệt xong"))
