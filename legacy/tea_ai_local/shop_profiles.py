@@ -295,17 +295,22 @@ def interactive_open(account_id: str) -> None:
             while True:
                 try:
                     alive = [p for p in context.pages if not p.is_closed()]
-                    if not alive:
-                        break
-                    inspect_and_save(context, account, folder)
-                    # Event-loop wait also lets Playwright notice navigation/closure.
-                    alive[0].wait_for_timeout(5000)
-                except Exception as exc:
-                    if not [p for p in context.pages if not p.is_closed()]:
-                        break
-                    write_status(folder, 'error', 0,
-                                 f'Không thể đọc trạng thái: {type(exc).__name__}; hãy mở lại profile.')
+                except Exception:
+                    # Browser was closed by the operator.
                     break
+                if not alive:
+                    break
+                try:
+                    inspect_and_save(context, account, folder)
+                except Exception as exc:
+                    write_status(folder, 'error', 0,
+                                 f'Không thể đọc trạng thái: {type(exc).__name__}; đang thử lại.')
+                try:
+                    # Continue monitoring even across normal page navigations.
+                    alive[0].wait_for_timeout(5000)
+                except Exception:
+                    import time
+                    time.sleep(1)
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='TEA AI | quản lý profile nhiều gian hàng và đọc DOM trên HTML mẫu')
