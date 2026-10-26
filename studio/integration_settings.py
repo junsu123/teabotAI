@@ -90,9 +90,15 @@ def set_secret(name,value):
 def delete_secret(name):
     if name not in _SECRET_NAMES:
         raise ValueError("Loại khóa không hợp lệ")
+    # Remove any old OS-stored copy first. If it cannot be deleted, stop so
+    # a later lazy migration will not silently bring back the deleted key.
+    try:
+        backend=keyring_backend()
+        if backend.get_password(SERVICE,name):
+            backend.delete_password(SERVICE,name)
+    except Exception:
+        raise RuntimeError("Không thể xóa bản khóa cũ từ kho mật khẩu Windows; chưa xóa database.") from None
     secret_vault.delete_secret(SETTINGS,name)
-    try:keyring_backend().delete_password(SERVICE,name)
-    except Exception:pass
 
 
 def reveal_secret(provider):
