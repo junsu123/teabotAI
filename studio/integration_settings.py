@@ -185,6 +185,21 @@ def telegram_env():
             "TEA_TELEGRAM_ALLOWED_IDS":",".join(d["telegram_allowed_ids"])}
 
 
+
+def remove_openai_key():
+    d=read()
+    d["openai_agents"]=[]
+    _write(d)
+    delete_secret(OPENAI_SECRET)
+    return status()
+
+def remove_telegram_token():
+    d=read()
+    d["telegram_autostart"]=False
+    _write(d)
+    delete_secret(TELEGRAM_SECRET)
+    return status()
+
 def test_openai(http=None):
     """Read-only models listing; no token generation or billed inference."""
     key=_get(OPENAI_SECRET)
