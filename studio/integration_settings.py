@@ -179,8 +179,8 @@ def telegram_env():
     token=_get(TELEGRAM_SECRET)
     if not token:
         raise ValueError("Chưa lưu Telegram Bot Token")
-    if not d["telegram_allowed_ids"]:
-        raise ValueError("Cần ít nhất một Telegram User ID được phép")
+    # Bootstrap: without authorized IDs only /myid is accessible.
+    # Every operational command remains blocked by the bot allowlist.
     return {"TEA_TELEGRAM_TOKEN":token,
             "TEA_TELEGRAM_ALLOWED_IDS":",".join(d["telegram_allowed_ids"])}
 
