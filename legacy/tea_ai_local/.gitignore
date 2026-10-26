@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+listing_data/
+config.json
+.env
+*.session
+*.sqlite3
+shop_accounts.json
+*.tmp

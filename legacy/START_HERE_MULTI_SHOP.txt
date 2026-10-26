@@ -1,0 +1,24 @@
+TEA AI MULTI-SHOP – MỞ RỘNG BỘ PYTHON CŨ
+=======================================
+1. Giải nén file vào thư mục bạn muốn (bao gồm TEA_AI_LOCAL_Python_Starter đã tích hợp).
+2. Xem tea_ai_local/SHOP_PROFILES_GUIDE.md để cài và cấu hình.
+3. Chạy PowerShell trong tea_ai_local:
+    py -3 -m pip install -r browser_requirements.txt
+    py -3 -m playwright install chromium
+    py -3 shop_profiles.py init
+    py -3 shop_profiles.py add shopee_01 shopee --browser chrome
+    py -3 shop_profiles.py add tiktok_01 tiktok --browser chrome
+    py -3 shop_profiles.py list
+4. Mở từng profile để đăng nhập bằng tay:
+    py -3 shop_profiles.py open shopee_01
+5. Kiểm thử nhận diện form (HTML nội bộ):
+    py -3 shop_profiles.py scan-demo shopee_01 demo_product_form.html
+6. Telegram: gửi ảnh chú thích:
+    SKU=TRA-001 MODE=new ACCOUNTS=shopee_01,tiktok_01
+   SKU thật phải tồn tại trong products.json.
+
+CẢNH BÁO:
+- Không có tính năng né giới hạn sàn hay vượt xác thực bảo mật.
+- Chưa tự đăng sản phẩm hay kiểm thử đăng sản phẩm trên sàn thật.
+- Cookie nằm trong từng Chrome profile và có thể hết hạn.
+- Đừng chia sẻ/đồng bộ dữ liệu trong listing_data/account_profiles.

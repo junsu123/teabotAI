@@ -1,0 +1,11 @@
+TEA AI MARS STUDIO v2 – QUẢN LÝ PROXY & HỌC ĐĂNG BÀI BẰNG NÚT BẤM
+
+1. Giải nén toàn bộ ZIP.
+2. Mở studio/setup_windows.bat để cài công cụ Playwright và kho mật khẩu proxy.
+3. Mở studio/start_windows.bat để chạy GUI.
+4. Menu Kho Proxy: Thêm / Sửa / Xóa / Thử kết nối.
+5. Menu Gian hàng & Profile: Tạo Chrome profile, gán proxy, mở Chrome.
+6. Menu Học đăng bài (trình duyệt): Bắt đầu học / Dừng & lưu / Xem dữ liệu.
+
+ĐỌC CHI TIẾT: studio/README_V2_VI.md
+GHI CHÚ: Đây là bản quản lý & ghi thao tác DOM, CHƯA tự động đăng sản phẩm.

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TEA AI • Mars Studio</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-icon">✦</div><div><b>TEA AI</b><span>MARS STUDIO <em>LOCAL</em></span></div></div>
+    <div class="space-stamp"><span class="small-star">✺</span><div>TRỤ SỞ CỦA BẠN <strong>TRÊN SAO HỎA</strong></div></div>
+    <div class="menu-label">TRUNG TÂM ĐIỀU HÀNH</div>
+    <nav id="nav">
+      <button class="nav-item active" data-view="hq"><span>◈</span> Trụ sở AI <i>01</i></button>
+      <button class="nav-item" data-view="agents"><span>♟</span> Nhân viên AI <i>06</i></button>
+      <button class="nav-item" data-view="missions"><span>◫</span> Giao nhiệm vụ</button>
+      <div class="nav-separator"></div>
+      <div class="menu-label inside">KINH DOANH</div>
+      <button class="nav-item" data-view="shops"><span>▣</span> Gian hàng & Profile</button>
+      <button class="nav-item" data-view="proxies"><span>⇄</span> Kho Proxy</button>
+      <button class="nav-item" data-view="products"><span>◉</span> Kho sản phẩm</button>
+      <button class="nav-item" data-view="jobs"><span>▤</span> Đơn đăng sản phẩm</button>
+      <div class="nav-separator"></div>
+      <div class="menu-label inside">HỌC HỎI & KẾT NỐI</div>
+      <button class="nav-item" data-view="memory"><span>✧</span> Bộ nhớ tự học</button>
+      <button class="nav-item" data-view="telegram"><span>➤</span> Telegram Bot</button>
+      <button class="nav-item" data-view="dom"><span>⌘</span> Học đăng bài (trình duyệt)</button>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="sidebar-orb">✦ <span>6 AI<br>AGENTS</span></div>
+      <small>Chạy trên máy tính của bạn</small><strong><span class="led"></span> Local workstation</strong>
+    </div>
+  </aside>
+  <section class="workspace">
+    <header class="topbar">
+      <div class="breadcrumb"><span>◈</span><b id="breadcrumb">Trụ sở AI</b><small>/ TEA AI Company</small></div>
+      <div class="top-actions"><span class="top-pill"><span class="led"></span> LOCAL MODE</span><span class="clock" id="clock"></span><button class="outline-btn" id="refreshBtn">↻ Làm mới</button><div class="user-circle">CEO</div></div>
+    </header>
+    <main id="mainContent"></main>
+    <footer class="footer"><span><span class="led"></span> TEA AI MARS STUDIO <span class="subtle">• Bản thử nghiệm trên máy cá nhân</span></span><span>Python + SQLite + giao diện ảo</span></footer>
+  </section>
+</div>
+<div id="toasts" class="toasts"></div>
+<div class="modal-backdrop" id="modalBackdrop" hidden><div class="modal" id="modal"><button class="modal-close" id="closeModal">✕</button><div id="modalBody"></div></div></div>
+<script src="/app.js"></script>
+</body>
+</html>

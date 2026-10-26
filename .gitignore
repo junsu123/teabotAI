@@ -1,0 +1,37 @@
+# Python caches / local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Local login and session data
+.env
+.env.*
+!.env.example
+**/profiles/
+**/user_data/
+**/cookies/
+**/storage_state*.json
+**/shop_accounts.json
+**/proxy_accounts.json
+**/proxy_credentials.json
+**/secrets.json
+**/config.local.json
+**/telegram_token*
+**/data/*
+!**/data/README.txt
+
+# Local databases and logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+outputs/
+jobs/
+recordings/
+training_sessions/
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,13 @@
+{
+  "_note": "Mặc định chỉ hỗ trợ thủ công. Không bật tự động hóa trên sàn khi chưa được phép.",
+  "shopee": {
+    "start_url": "https://banhang.shopee.vn/",
+    "permission_to_automate": false,
+    "steps": []
+  },
+  "tiktok": {
+    "start_url": "https://seller-vn.tiktok.com/",
+    "permission_to_automate": false,
+    "steps": []
+  }
+}
