@@ -70,6 +70,9 @@ class SessionMonitorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             folder = Path(temp)
             result = sm.inspect_and_save(ctx, account, folder)
+            # A stale visible tab is NOT enough; needs a fresh protected load.
+            self.assertEqual(result["status"], "checking")
+            result = sm.inspect_and_save(ctx, account, folder, fresh_navigation=True)
             self.assertEqual(result["status"], "logged_in")
             status_text = (folder / sm.STATUS_FILE).read_text(encoding="utf-8")
             self.assertNotIn("SUPER_SECRET", status_text)
