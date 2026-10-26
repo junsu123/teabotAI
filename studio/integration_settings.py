@@ -80,7 +80,7 @@ def set_secret(name,value):
     if not isinstance(value,str):
         raise ValueError("Khóa phải là văn bản")
     val=value.strip()
-    if not val or len(val)>4096 or any(x in val for x in "\\r\\n\\x00 "):
+    if not val or len(val)>4096 or any(x in val for x in "\r\n\x00 "):
         raise ValueError("Khóa không hợp lệ (không được có khoảng trắng hoặc xuống dòng)")
     secret_vault.save_secret(SETTINGS,keyring_backend(),SERVICE,name,val)
     # A newly replaced legacy key must not come back after SQLite deletion.
