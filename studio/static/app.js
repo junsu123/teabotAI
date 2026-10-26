@@ -101,7 +101,7 @@ function missionsView(){const ms=data.missions;return `${pageHead('👑 CEO COMM
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0">
 ${['ceo','strategy','compliance','research','creative','analyst'].map(agent=>{const config=(data.model_routing?.routes||{})[agent]||{provider:'ollama'};
 return `<div style="border:1px solid #315062;border-radius:10px;padding:12px">
-<strong>${h(actorName(agent))}</strong><div class="tagline">${config.provider==='openai'?'OpenAI – '+h(config.model):config.provider==='claude'?'Claude – '+h(config.model):'Ollama – Máy cá nhân'}</div></div>`}).join('')}
+<strong>${h(actorName(agent))}</strong><div class="tagline">${config.provider==='openai'?'OpenAI – '+h(config.model):config.provider==='claude'?'Claude – '+h(config.model):config.provider==='auto'?'Tự động – '+h(config.model):config.provider==='gemini'?'Gemini – '+h(config.model):config.provider==='groq'?'Groq – '+h(config.model):'Ollama – Máy cá nhân'}</div></div>`}).join('')}
 </div><div class="note">API AI: ${(data.model_routing?.claude_agents?.length||data.model_routing?.openai_agents?.length)?((data.model_routing?.claude_key_configured||data.model_routing?.openai_key_configured)?'Đã lưu ít nhất một API key':'⚠️ Chưa lưu API key'):'Chưa bật (không phát sinh phí API)'}.
 Chi phí API tháng này (ước tính): ${Number(data.openai_usage?.estimated_usd||0).toFixed(3)} USD; giới hạn cục bộ ${data.model_routing?.monthly_limit_usd??12} USD/tháng.
 <br>Ollama: ${data.ollama?.running?(data.ollama.model_ready?'Đã kết nối – '+h(data.ollama.model):'Đang chạy, chưa tải model '+h(data.ollama.model)):'Chưa kết nối'}.
@@ -305,7 +305,7 @@ function telegramSettingsSection(){
  <div class="tagline">Để tạo Bot: vào Telegram → tìm <strong>@BotFather</strong> → gửi /newbot. Bạn cần biết User ID dạng số của tài khoản được phép sử dụng.</div>
  </section>`;
 }
-function settingsView(){return `${pageHead('⚙ LOCAL INTEGRATIONS','Cài đặt <span class="gradient-text">Claude / ChatGPT & Telegram</span>',
+function settingsView(){return `${pageHead('⚙ LOCAL INTEGRATIONS','Cài đặt <span class="gradient-text">Gemini / Groq / AI & Telegram</span>',
  'Cấu hình trực tiếp tại đây – không sửa file .env và không chạy lệnh cấu hình.', '')}
  <div class="two-cols">${aiSettingsSection()}${telegramSettingsSection()}</div>`;}
 function telegramView(){return `${pageHead('➤ TELEGRAM CONNECTOR','Telegram <span class="gradient-text">Bot</span>',
@@ -321,10 +321,15 @@ async function saveAISettings(event){
  event.preventDefault();
  const e=new FormData(event.target),roles=['ceo','strategy','compliance','research','creative','analyst'];
  const payload={
+  gemini_api_key:e.get('gemini_api_key')||'',groq_api_key:e.get('groq_api_key')||'',
   claude_api_key:e.get('claude_api_key')||'',openai_api_key:e.get('openai_api_key')||'',
+  allow_paid_fallback:e.get('allow_paid_fallback')==='on',
+  provider_priority:['gemini','groq','claude','openai','ollama'],
   claude_monthly_limit_usd:Number(e.get('claude_monthly_limit_usd')),
   monthly_limit_usd:Number(e.get('monthly_limit_usd')),
   agent_providers:Object.fromEntries(roles.map(a=>[a,e.get('provider_'+a)])),
+  gemini_models:Object.fromEntries(roles.map(a=>[a,e.get('gemini_model_'+a)])),
+  groq_models:Object.fromEntries(roles.map(a=>[a,e.get('groq_model_'+a)])),
   claude_models:Object.fromEntries(roles.map(a=>[a,e.get('claude_model_'+a)])),
   openai_models:Object.fromEntries(roles.map(a=>[a,e.get('openai_model_'+a)]))
  };
@@ -340,9 +345,9 @@ async function saveTelegramSettings(event){
  catch(err){toast(err.message,true)}
 }
 async function removeIntegrationSecret(provider){
- const label=provider==='claude'?'Claude API key':provider==='openai'?'OpenAI API key':'Telegram Bot Token';
+ const label=provider==='gemini'?'Gemini API key':provider==='groq'?'Groq API key':provider==='claude'?'Claude API key':provider==='openai'?'OpenAI API key':'Telegram Bot Token';
  if(!confirm('Xóa '+label+' khỏi kho mật khẩu Windows?'))return;
- try{const route=provider==='claude'?'claude/remove-key':provider==='openai'?'openai/remove-key':'telegram/remove-token';
+ try{const route=provider==='gemini'?'gemini/remove-key':provider==='groq'?'groq/remove-key':provider==='claude'?'claude/remove-key':provider==='openai'?'openai/remove-key':'telegram/remove-token';
  const r=await api('settings/'+route,{confirm:true});
  toast(r.message||'Đã xóa khóa đã lưu');await refresh();}
  catch(e){toast('Không xóa được '+label+': '+e.message,true)}
