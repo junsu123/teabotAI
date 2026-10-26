@@ -237,8 +237,9 @@ function aiSettingsSection(){
  <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Lấy API key</a></div>
  <div class="integration-key-actions"><button type="button" class="small-btn" onclick="testConnection('groq')">✓ Kiểm tra Groq</button>
  <button type="button" class="small-btn" onclick="testGroqChat()">Thử trực tiếp GPT-OSS-20B</button>
+ <button type="button" class="small-btn" onclick="testGroqSavedCEO()">★ Kiểm tra khóa đã lưu + model AI CEO</button>
  ${cfg.groq_key_configured?'<button type="button" class="integration-danger" onclick="removeIntegrationSecret(\'groq\')">Xóa khóa</button>':''}</div>
- <p class="integration-key-helper">Nếu kiểm tra danh sách model bị HTTP 403, bấm thử GPT-OSS-20B để xác định API tạo văn bản có hoạt động không. Phép thử này tiêu thụ một ít token và cần xác nhận của bạn.</p>
+ <p class="integration-key-helper">Kiểm tra Groq và thử GPT-OSS-20B có thể dùng khóa vừa dán (chưa lưu). Nút <strong>★ Kiểm tra khóa đã lưu + model AI CEO</strong> chỉ dùng khóa SQLite và model CEO đã lưu, giống đường xử lý nhiệm vụ. Hãy bấm Lưu cấu hình AI trước nếu vừa thay key. Các phép thử tạo văn bản dùng một ít token/quota.</p>
  <div id="groqConnectionResult" class="integration-feedback" role="status" aria-live="polite" hidden></div>
  </article></div> <div class="integration-section-title"><span>BƯỚC 2</span><div><h3>Chọn chế độ vận hành</h3><p>Ưu tiên miễn phí, không tự gọi Claude/OpenAI tính phí.</p></div></div>
  <section class="integration-settings-area">
@@ -535,6 +536,24 @@ async function testGroqChat(){
  }catch(err){
   if(el){el.hidden=false;el.classList.add('error');el.textContent='✕ '+err.message;}
   toast('Thử GPT-OSS-20B thất bại: '+err.message,true);
+ }
+}
+async function testGroqSavedCEO(){
+ if(!confirm('Kiểm tra API key ĐÃ LƯU trong database và model Groq AI CEO ĐÃ LƯU? Sẽ tạo một phản hồi ngắn, tiêu thụ token/quota và có thể phát sinh phí tùy gói Groq.'))return;
+ const el=$('#groqConnectionResult');
+ const typed=$('#groqApiKeyInput')?.value?.trim()||'';
+ if(el){el.hidden=false;el.classList.remove('error');el.textContent='Đang gọi Groq bằng khóa SQLite và model AI CEO thực tế...';}
+ try{
+   const result=await api('settings/groq/test-saved-agent',{agent:'ceo',confirm_token_use:true});
+   const msg='✓ '+(result.message||'Groq hoạt động')+' Model: '+result.model+
+     (result.sample?' • Trả lời: '+result.sample:'')+
+     (typed?' • Lưu ý: khóa đang nhập trong ô có thể khác khóa đã lưu trong database.':'');
+   if(el)el.textContent=msg;else toast(msg);
+ }catch(err){
+   const msg='✕ Kiểm tra khóa đã lưu/model CEO thất bại: '+err.message+
+      (typed?' • Bạn đang nhập khóa trong ô: hãy bấm Lưu cấu hình AI để dùng khóa mới.':'');
+   if(el){el.hidden=false;el.classList.add('error');el.textContent=msg;}
+   toast(msg,true);
  }
 }
 async function controlTelegram(action){
