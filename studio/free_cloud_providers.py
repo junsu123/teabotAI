@@ -5,6 +5,8 @@ Models chosen from documented allowlists; keys passed only in request headers.
 """
 from __future__ import annotations
 import json
+import ssl
+import socket
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
@@ -29,11 +31,30 @@ def _request_json(request, transport=None, timeout=60):
                 return json.loads(resp.read(1_500_000).decode("utf-8"))
         return transport(request)
     except HTTPError as ex:
-        if ex.code == 429 or 500 <= ex.code <= 599:
-            raise TemporaryProviderError("API tạm không sẵn sàng hoặc hết hạn mức (HTTP "+str(ex.code)+")") from None
-        raise RuntimeError("API từ chối yêu cầu (HTTP "+str(ex.code)+"). Kiểm tra khóa và mô hình.") from None
-    except (URLError,TimeoutError,OSError):
-        raise TemporaryProviderError("Không kết nối được nhà cung cấp AI; kiểm tra mạng hoặc thử nhà cung cấp phụ.") from None
+        code=ex.code
+        reasons={
+            400:"Yêu cầu hoặc tham số model không hợp lệ.",
+            401:"API key không hợp lệ hoặc thuộc dịch vụ khác. Hãy tạo key tại console.groq.com/keys nếu dùng Groq.",
+            403:"API key/tài khoản không có quyền. Kiểm tra quyền và giới hạn dự án trên GroqCloud.",
+            404:"Đường dẫn API hoặc model không tồn tại.",
+            429:"Hết lượt hoặc vượt giới hạn tốc độ API; có thể thử lại.",
+            498:"Nhà cung cấp tạm hết năng lực phục vụ."
+        }
+        detail=reasons.get(code,"Máy chủ từ chối yêu cầu hoặc tạm gián đoạn.")
+        if code in (429,498) or 500<=code<=599:
+            raise TemporaryProviderError("HTTP "+str(code)+": "+detail) from None
+        raise RuntimeError("HTTP "+str(code)+": "+detail) from None
+    except (URLError,TimeoutError,OSError) as ex:
+        reason=getattr(ex,"reason",ex)
+        if isinstance(reason,ssl.SSLError):
+            message="Lỗi chứng chỉ SSL/TLS khi kết nối API. Kiểm tra ngày giờ Windows, VPN hoặc phần mềm chặn HTTPS."
+        elif isinstance(reason,socket.gaierror):
+            message="Không phân giải được tên miền API (DNS). Kiểm tra Internet, DNS hoặc proxy."
+        elif isinstance(reason,(TimeoutError,socket.timeout)):
+            message="Hết thời gian chờ kết nối API. Kiểm tra kết nối Internet, proxy hoặc tường lửa."
+        else:
+            message="Không truy cập được API qua HTTPS. Kiểm tra Internet, proxy, VPN hoặc tường lửa."
+        raise TemporaryProviderError(message) from None
 
 
 def _system(agent):
@@ -92,12 +113,20 @@ def test_gemini(key,transport=None):
 
 
 def test_groq(key,transport=None):
-    if not key:raise ValueError("Chưa lưu Groq API key")
+    if not key:raise ValueError("Chưa lưu hoặc chưa nhập Groq API key. Hãy dán key vào phần Cài đặt và bấm Kiểm tra.")
+    key=key.strip()
+    if key.startswith("xai-"):
+        raise ValueError("Đây có vẻ là API key Grok của xAI. GroqCloud là dịch vụ khác; hãy tạo key tại console.groq.com/keys.")
     request=Request("https://api.groq.com/openai/v1/models",
                     headers={"Authorization":"Bearer "+key})
     response=_request_json(request,transport,timeout=10)
     if not isinstance(response,dict) or not isinstance(response.get("data"),list):
-        raise ValueError("Danh sách model Groq không hợp lệ")
+        raise ValueError("Groq API phản hồi danh sách model không hợp lệ")
     found={m.get("id","") for m in response["data"] if isinstance(m,dict)}
-    return {"ok":True,"message":"Groq API key được chấp nhận. Chưa tạo nội dung.",
-            "supported_models":sorted(found.intersection(GROQ_MODELS))}
+    available=sorted(found.intersection(GROQ_MODELS))
+    return {"ok":True,
+        "message":("GroqCloud API key hợp lệ; đã đọc được "+str(len(found))+
+                   " model trong tài khoản. Chưa tạo nội dung."),
+        "supported_models":available,
+        "warning":("" if available else
+                   "Không có model nào trùng với danh sách phần mềm hỗ trợ. Hãy kiểm tra quyền model trong GroqCloud hoặc cập nhật phần mềm.")}
