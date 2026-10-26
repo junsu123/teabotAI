@@ -26,7 +26,7 @@ class ModelRouterTests(unittest.TestCase):
         self.assertIn("tiếng Việt",result)
         self.assertEqual(len(calls),1)
         self.assertIn("tiếng Việt",calls[0][1])
-        self.assertFalse(self.db.exists())
+        self.assertTrue(self.db.exists())  # Records the provider actually used.
 
     def test_provider_selection_and_cost_opt_in(self):
         env={"TEA_OPENAI_AGENTS":"ceo,strategy,compliance",
