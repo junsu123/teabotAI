@@ -82,18 +82,37 @@ class ProductVideoWorkflowTests(unittest.TestCase):
         def chat(agent,prompt):
             calls.append((agent,prompt))
             if agent=="research":return "Hook theo ghi chú, chưa xem video TikTok thật."
-            if agent=="compliance":return json.dumps({"status":"approved","reason":"Không có công dụng y tế","required_changes":[]})
-            if agent=="ceo":return "CEO chốt storyboard, chờ duyệt sản xuất."
-            if "PHÒNG SẢN XUẤT VIDEO AI" in prompt:
-                return "Cảnh 1-5: storyboard, prompt, VO. Chưa render MP4."
-            return "Kịch bản 5 cảnh giới thiệu tên, thành phần và cách pha."
+            if agent=="analyst":return "CHƯA XÁC MINH GIÁ BÁN LẺ; cần báo giá nguồn."
+            if agent=="strategy":
+                return json.dumps({"titles":["Trà thảo mộc Đinh Lăng Cỏ Ngọt dạng túi lọc",
+                    "Trà túi lọc Đinh Lăng với Cỏ Ngọt tiện pha"],
+                    "description":"Trà thảo mộc theo thông tin chủ cung cấp. Thành phần đinh lăng, "
+                                   "cỏ ngọt. Giữ thông tin bao bì gốc; vui lòng xem nhãn trước khi dùng."},
+                    ensure_ascii=False)
+            if agent=="compliance":
+                return json.dumps({"status":"approved","reason":"Không có công dụng y tế","required_changes":[]})
+            if agent=="ceo":return "CEO chốt 5 prompt Veo 3, chờ duyệt sản xuất."
+            if "5 prompt Veo 3" in prompt:
+                return json.dumps({"scenes":[{"scene":i,"duration_seconds":8,
+                    "veo_prompt":"Cảnh "+str(i)+": khung hình 9:16, giữ nguyên bao bì sản phẩm, "
+                    "ánh sáng dịu và diễn xuất tự nhiên.","dialogue":"Giới thiệu trà"} for i in range(1,6)]},
+                    ensure_ascii=False)
+            return "Kịch bản 40 giây gồm 5 cảnh giới thiệu tên, thành phần và cách pha."
         self.assertTrue(ceo_engine.work_once(self.db,chat,lambda:{"/unused":"unused"}))
         room=pv.production(self.db,mid)
         self.assertEqual(room["status"],"awaiting_video_render")
-        self.assertIn("storyboard",room["storyboard"])
+        self.assertEqual(len(json.loads(room["storyboard"])["scenes"]),5)
+        import commerce_content as cc
+        commerce=cc.get(self.db,mid)
+        self.assertIn("CHƯA XÁC MINH",commerce["retail_price"])
+        self.assertIn("Trà thảo mộc",commerce["seo_title"])
+        self.assertIn("Thành phần",commerce["seo_description"])
+        self.assertIn("40 giây",commerce["script_40s"])
+        self.assertEqual(len(json.loads(commerce["veo_prompts"])["scenes"]),5)
         self.assertIn("Hook",room["research"])
         self.assertIn("Kịch bản",room["script"])
-        self.assertEqual([a for a,_ in calls],["research","creative","compliance","creative","ceo"])
+        self.assertEqual([a for a,_ in calls],
+                         ["research","analyst","strategy","creative","compliance","creative","ceo"])
         self.assertIn("CHƯA",calls[0][1])
         with sqlite3.connect(self.db) as con:
             self.assertEqual(con.execute("SELECT status FROM missions WHERE id=?",(mid,)).fetchone()[0],"done")
@@ -102,7 +121,16 @@ class ProductVideoWorkflowTests(unittest.TestCase):
         mid=self.new_mission()
         def chat(agent,prompt):
             if agent=="research":return "Ghi chú tham khảo"
-            if agent=="compliance":return json.dumps({"status":"needs_review","reason":"Thiếu chứng cứ","required_changes":["Xóa công dụng y tế"]})
+            if agent=="analyst":return "CHƯA XÁC MINH GIÁ"
+            if agent=="strategy":return json.dumps({"titles":[
+                "Trà đinh lăng túi lọc sử dụng hàng ngày",
+                "Trà túi lọc đinh lăng và cỏ ngọt tiện pha"],
+                "description":"Trà thảo mộc theo nhãn do chủ cung cấp. Thành phần đinh lăng và cỏ ngọt. "
+                              "Xem kỹ hướng dẫn và thông tin in trên bao bì sản phẩm trước khi sử dụng."},
+                ensure_ascii=False)
+            if agent=="compliance":
+                return json.dumps({"status":"needs_review","reason":"Thiếu chứng cứ",
+                                   "required_changes":["Xóa công dụng y tế"]})
             if agent=="ceo":self.fail("CEO should not approve production before compliance")
             return "Kịch bản quảng bá an toàn nhưng cần xem xét"
         self.assertTrue(ceo_engine.work_once(self.db,chat,lambda:{}))
