@@ -178,6 +178,35 @@ def test_gemini(key,transport=None):
             "supported_models":sorted(found.intersection(GEMINI_MODELS))}
 
 
+def test_groq_chat(key,transport=None):
+    """User-initiated tiny chat test; this consumes API tokens and quota."""
+    if not isinstance(key,str) or not key.strip():
+        raise ValueError("Chưa nhập hoặc lưu Groq API key")
+    key=key.strip()
+    if key.startswith("xai-"):
+        raise ValueError("Đây có vẻ là khóa Grok của xAI, không phải GroqCloud.")
+    model="openai/gpt-oss-20b"
+    payload={
+        "model":model,
+        "messages":[{"role":"user","content":"Chỉ trả lời đúng một từ: OK"}],
+        "max_completion_tokens":160,
+        "temperature":0,
+    }
+    request=Request(GROQ_ENDPOINT,method="POST",
+        data=json.dumps(payload,ensure_ascii=False).encode("utf-8"),
+        headers={"Authorization":"Bearer "+key,"Content-Type":"application/json",
+                 "Accept":"application/json"})
+    response=_request_json(request,transport,timeout=20)
+    if not isinstance(response,dict) or not isinstance(response.get("choices"),list) or not response["choices"]:
+        raise ValueError("Groq không trả về kết quả Chat Completions hợp lệ")
+    message=response["choices"][0].get("message",{})
+    answer=message.get("content") if isinstance(message,dict) else None
+    snippet=(answer[:100] if isinstance(answer,str) else "")
+    return {"ok":True,"model":model,"sample":snippet,
+            "message":"Groq Chat Completions hoạt động: đã gọi thành công GPT-OSS-20B. "
+                      "Phép thử có tiêu thụ một ít token/quota."}
+
+
 def test_groq(key,transport=None):
     if not key:raise ValueError("Chưa lưu hoặc chưa nhập Groq API key. Hãy dán key vào phần Cài đặt và bấm Kiểm tra.")
     key=key.strip()
