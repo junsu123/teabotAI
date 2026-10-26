@@ -26,6 +26,8 @@ sys.path.insert(0,str(LEGACY))
 import shop_profiles
 import browser_listing
 import proxy_store
+import ceo_engine
+import main as legacy_ai
 import uuid
 import time
 import re
@@ -66,6 +68,7 @@ def init():
    CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, message TEXT NOT NULL);
   ''')
+ ceo_engine.setup(DB)
 
 def utc():return datetime.now().astimezone().isoformat(timespec='seconds')
 
@@ -129,6 +132,13 @@ def training_detail(session_id):
 
 def overview():
  shops=list_accounts(); jobs=list_jobs(); ms=list_missions()
+ reports,delegations=ceo_engine.get_progress(DB)
+ for m in ms:
+  r=reports.get(m['id'],{})
+  m['ceo_report']=r.get('report','')
+  m['ceo_error']=r.get('error','')
+  m['ceo_plan']=r.get('plan','')
+  m['delegations']=list(reversed(delegations.get(m['id'],[])))
  return {'agents':AGENTS,'accounts':shops,'jobs':jobs,'missions':ms,
     'learnings':list_learnings(), 'products':list_products(), 'proxies':proxy_store.all_proxies(), 'training':training_summary(),
     'stats':{'agents':len(AGENTS),'shops':len(shops),'jobs_open':sum(x['status'] not in ('posted','rejected','failed') for x in jobs),
@@ -159,7 +169,7 @@ class Handler(BaseHTTPRequestHandler):
   if not self.is_local_host():return error_reply(self,403,'Chỉ cho phép truy cập cục bộ')
   path=urlparse(self.path).path
   if path=='/api/overview':return json_reply(self,overview())
-  if path=='/api/health':return json_reply(self,{'ok':True,'date':utc(),'version':'0.2.0'})
+  if path=='/api/health':return json_reply(self,{'ok':True,'date':utc(),'version':'0.3.0','ceo_worker':'enabled'})
   if path=='/api/training':return json_reply(self,{'sessions':training_summary()})
   if path=='/api/training/detail':
    sid=parse_qs(urlparse(self.path).query).get('id',[''])[0]
@@ -277,13 +287,12 @@ class Handler(BaseHTTPRequestHandler):
     detail=sanitize(body.get('detail',''),2000)
     mid=queue_ceo_mission(title,detail)
     return json_reply(self,{'ok':True,'mission_id':mid,'recipient':'ceo'})
+   if path=='/api/missions/retry':
+    mid=int(body.get('id',0))
+    ceo_engine.retry(DB,mid)
+    return json_reply(self,{'ok':True,'message':'Đã chuyển nhiệm vụ về hàng đợi AI CEO'})
    if path=='/api/missions/status':
-    jid=int(body.get('id',0));status=body.get('status','')
-    if status not in ('pending','in_progress','done','blocked'):raise ValueError('Trạng thái không hợp lệ')
-    with conn() as c:
-     cur=c.execute('UPDATE missions SET status=?,updated_at=? WHERE id=?',(status,utc(),jid))
-     if not cur.rowcount:raise ValueError('Không tìm thấy nhiệm vụ')
-    return json_reply(self,{'ok':True})
+    raise ValueError('Trạng thái do CEO cập nhật tự động. Dùng Thử lại khi blocked.')
    if path=='/api/learnings':
     title=sanitize(body.get('title',''),140);description=sanitize(body.get('description',''),1500)
     if len(title)<3:raise ValueError('Cần tiêu đề bài học')
@@ -340,12 +349,18 @@ def main():
  args=parser.parse_args()
  if not (1024<=args.port<=65535):raise SystemExit('Port không hợp lệ')
  init()
+ stop_event=threading.Event()
+ worker=threading.Thread(target=ceo_engine.worker_loop,
+     args=(DB,legacy_ai.chat,list_products,stop_event),daemon=True,name='AI-CEO-Worker')
+ worker.start()
  url=f'http://127.0.0.1:{args.port}'
  server=ThreadingHTTPServer(('127.0.0.1',args.port),Handler)
  print(f'TEA AI MARS STUDIO: {url}\nDữ liệu nội bộ: {DB}\nNhấn Ctrl+C để dừng.')
  if not args.no_browser:threading.Timer(0.6,lambda:webbrowser.open(url)).start()
  try:server.serve_forever()
  except KeyboardInterrupt:pass
- finally:server.server_close()
+ finally:
+  stop_event.set()
+  server.server_close()
 
 if __name__=='__main__':main()
