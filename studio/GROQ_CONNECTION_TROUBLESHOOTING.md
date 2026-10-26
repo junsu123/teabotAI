@@ -1,5 +1,38 @@
 # Khắc phục lỗi không kết nối GroqCloud từ giao diện TEA AI
 
+## Đã sửa: mã Python dùng Groq SDK chạy được, nhưng phần mềm bị HTTP 403
+
+Vấn đề trước đây: Mars Studio sử dụng `urllib.request`, trong khi chương trình Python thử nghiệm dùng **`from groq import Groq`**, SDK chính thức chạy qua httpx. Phần mềm đã chuyển **toàn bộ các cuộc gọi Groq thật** (CEO/agent, danh sách model, test một câu) sang `Groq(api_key=key)` với SDK, tương tự chương trình mẫu. Không phải dán khóa vào mã nguồn.
+
+**Quan trọng về API key:** Chương trình mẫu có thể sử dụng `GROQ_API_KEY` từ biến môi trường, hoặc rơi về chuỗi mặc định cố định khi biến môi trường không tồn tại. Mars Studio **không** dùng khóa mã hóa cứng hoặc khóa nằm trong biến môi trường; nó đọc API key từ SQLite mã hóa. Vì vậy, chương trình mẫu chạy được KHÔNG xác nhận khóa trong database là cùng khóa. Phải nhập và bấm Lưu cấu hình AI.
+
+Nếu bạn từng dán key ở đoạn mã, chat, screenshot hay kho công khai, **thu hồi khóa đã lộ** tại https://console.groq.com/keys rồi tạo khóa mới. Không ghi khóa vào `.py`, GitHub, `.env` hay tài liệu hướng dẫn.
+
+### Cách cập nhật
+
+Đóng ứng dụng và chạy:
+
+```powershell
+cd D:\APhanMem\teabotAI
+git pull origin main
+cd studio
+.\setup_windows.bat
+.\start_windows.bat
+```
+
+**Phải chạy setup_windows.bat một lần sau bản cập nhật** để cài `groq>=1.7,<2`.
+
+Mở http://127.0.0.1:8765, nhấn Ctrl+Shift+R, chọn Cài đặt AI & Telegram → Gemini & các AI:
+
+1. Dán khóa Groq **mới** vào thẻ GroqCloud, bấm **Lưu cấu hình AI**.
+2. Bấm **Thử như mã Python mẫu (GPT-OSS-120B)**: kiểm tra cùng SDK, model `openai/gpt-oss-120b`, câu hỏi `Reply with exactly: GROQ API OK`, `max_completion_tokens=100`; dùng khóa vừa dán nếu có. Có tiêu thụ token, nên chỉ chạy khi bạn đồng ý.
+3. Bấm **★ Kiểm tra khóa đã lưu + model AI CEO**: cũng dùng Groq SDK nhưng **bắt buộc** lấy key từ SQLite và model CEO đã lưu, với lời nhắc agent thực tế. Nếu lỗi chỉ khi chạy bước này, so sánh key đã lưu và model CEO; không đưa khóa cho người khác.
+4. Nếu hai bước đều OK mà CEO vẫn lỗi, mở Nhiệm vụ → Xem tiến độ/báo cáo, kiểm tra dòng lỗi `Groq/<model> · agent <vai trò>`. Vẫn có thể do độ dài tác vụ, hạn mức token, Gemini đứng đầu chế độ Tự động hoặc lỗi ở agent khác.
+
+Giữ **Gemini làm AI chính**, **Groq dự phòng**, Ollama cuối; chọn `Chỉ Groq` cho CEO nếu muốn thử Groq độc lập, sau đó chuyển lại `Tự động`.
+
+
+
 ## Khi Groq test key thành công nhưng AI CEO vẫn lỗi
 
 **Kiểm tra key đã nhập và key đang thực sự dùng là hai việc khác nhau.**
