@@ -32,6 +32,7 @@ import uuid
 import time
 import re
 import socket
+from urllib.request import build_opener, ProxyHandler
 
 DATA=ROOT/'data'
 DB=DATA/'studio.sqlite3'
@@ -130,6 +131,18 @@ def training_detail(session_id):
  ev=TRAIN_DIR/(session_id+'.events.jsonl')
  return {'steps':[json.loads(x) for x in ev.read_text(encoding='utf-8').splitlines() if x.strip()][:250] if ev.exists() else [], 'fields':[]}
 
+def ollama_health():
+ model=os.environ.get('OLLAMA_MODEL','qwen3:4b')
+ try:
+  model=legacy_ai.config().get('model',model)
+  opener=build_opener(ProxyHandler({}))
+  with opener.open('http://127.0.0.1:11434/api/tags',timeout=1.5) as resp:
+   result=json.loads(resp.read(400000).decode('utf-8'))
+  available=[str(x.get('name','')) for x in result.get('models',[])]
+  return {'running':True,'model':model,'model_ready':model in available,'models':available[:30]}
+ except Exception as exc:
+  return {'running':False,'model':model,'model_ready':False,'error':str(exc)[:250]}
+
 def overview():
  shops=list_accounts(); jobs=list_jobs(); ms=list_missions()
  reports,delegations=ceo_engine.get_progress(DB)
@@ -141,6 +154,7 @@ def overview():
   m['delegations']=list(reversed(delegations.get(m['id'],[])))
  return {'agents':AGENTS,'accounts':shops,'jobs':jobs,'missions':ms,
     'learnings':list_learnings(), 'products':list_products(), 'proxies':proxy_store.all_proxies(), 'training':training_summary(),
+    'ollama':ollama_health(),
     'stats':{'agents':len(AGENTS),'shops':len(shops),'jobs_open':sum(x['status'] not in ('posted','rejected','failed') for x in jobs),
              'missions_open':sum(x['status']!='done' for x in ms),'lessons':len(list_learnings())},
     'integration':{'ollama_url':'http://localhost:11434','telegram':'Cần cấu hình token ở máy',
