@@ -3,7 +3,7 @@ const h = x => String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':
 const $ = s => document.querySelector(s);
 let data={agents:[],accounts:[],jobs:[],missions:[],learnings:[],products:{},proxies:[],training:[],stats:{}}, activeView='hq', focusAgent=null, sceneScale=1, sceneMode='mars';
 let forumMissionId=0,forumData=null,forumBusy=false;
-const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',dom:'Học đăng bài'};
+const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt ChatGPT & Telegram',dom:'Học đăng bài'};
 async function api(endpoint, body=null){
  const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:12000);
  const opts=body===null?{signal:ctrl.signal}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal};
@@ -102,7 +102,7 @@ function missionsView(){const ms=data.missions;return `${pageHead('👑 CEO COMM
 ${['ceo','strategy','compliance','research','creative','analyst'].map(agent=>{const config=(data.model_routing?.routes||{})[agent]||{provider:'ollama'};
 return `<div style="border:1px solid #315062;border-radius:10px;padding:12px">
 <strong>${h(actorName(agent))}</strong><div class="tagline">${config.provider==='openai'?'OpenAI – '+h(config.model):'Ollama – Máy cá nhân'}</div></div>`}).join('')}
-</div><div class="note">OpenAI API: ${data.model_routing?.openai_agents?.length?(data.model_routing?.openai_key_configured?'Đã có API key trong môi trường':'⚠️ Chưa cấu hình OPENAI_API_KEY'):'Chưa bật (không phát sinh phí API)'}.
+</div><div class="note">OpenAI API: ${data.model_routing?.openai_agents?.length?(data.model_routing?.openai_key_configured?'Đã lưu API key trong hệ thống':'⚠️ Chưa lưu OpenAI API key'):'Chưa bật (không phát sinh phí API)'}.
 Chi phí API tháng này (ước tính): ${Number(data.openai_usage?.estimated_usd||0).toFixed(3)} USD; giới hạn cục bộ ${data.model_routing?.monthly_limit_usd??12} USD/tháng.
 <br>Ollama: ${data.ollama?.running?(data.ollama.model_ready?'Đã kết nối – '+h(data.ollama.model):'Đang chạy, chưa tải model '+h(data.ollama.model)):'Chưa kết nối'}.
 <br>Thông tin này là trạng thái cấu hình, không phải bảo đảm dịch vụ OpenAI đang sẵn sàng. Nhiệm vụ được xử lý theo thứ tự.</div></div>`}
@@ -192,12 +192,104 @@ function proxiesView(){const ps=data.proxies||[];return `${pageHead('⇄ PROXY M
 function productsView(){const rows=Object.entries(data.products);return `${pageHead('◉ PRODUCT LIBRARY','Kho <span class="gradient-text">trà túi lọc</span>','Hồ sơ chuẩn cho mỗi SKU: tên, mô tả, giá bán và tồn kho.',eButton('+ Thêm sản phẩm','onclick="showProductForm()"'))}<section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Mã SKU</th><th>Tên sản phẩm</th><th>Giá (VND)</th><th>Tồn kho</th><th>Trạng thái</th></tr></thead><tbody>${rows.map(([sku,p])=>`<tr><td><strong>${h(sku)}</strong></td><td>${h(p.title)}</td><td>${p.price===null?'Chưa có':Number(p.price).toLocaleString('vi-VN')+'đ'}</td><td>${p.stock??'Chưa có'}</td><td>${p.price!==null&&p.stock!==null&&!p.title.includes('THAY BẰNG')?'<span class="chip">Có dữ liệu</span>':'<span class="chip orange">Cần hoàn thiện</span>'}</td></tr>`).join('')}</tbody></table></div></section>`}
 function jobsView(){const rows=data.jobs;return `${pageHead('▤ PRODUCT LISTING','Nhiệm vụ <span class="gradient-text">đăng sản phẩm</span>','Mọi yêu cầu đăng sản phẩm được gửi vào hàng đợi AI CEO.',eButton('👑 Giao CEO đăng sản phẩm','onclick="showJobForm()"'))}<section class="panel"><div class="table-wrap">${rows.length?`<table class="data-table"><thead><tr><th>ID</th><th>SKU</th><th>Shop/Profile</th><th>Chế độ</th><th>Ảnh</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>${rows.map(j=>`<tr><td>#${j.id}</td><td><strong>${h(j.sku)}</strong></td><td>${tag(j.shop)}<div class="tagline">${h(j.account_id)}</div></td><td>${h(j.mode)}</td><td>${j.images}</td><td>${tag(j.status)}</td><td>${j.status==='received'?`<button class="small-btn" onclick="approveJob(${j.id})">Duyệt</button><button class="small-btn" onclick="rejectJob(${j.id})">Bỏ</button>`:'<span class="tagline">Kiểm tra từ Telegram/CLI</span>'}</td></tr>`).join('')}</tbody></table>`:empty('📦','Chưa có nhiệm vụ đăng bán','Gửi yêu cầu đến AI CEO. Job chỉ được tạo sau bước phân công của CEO.')}</div></section><div class="note warning" style="margin-top:16px">Việc duyệt đòi hỏi đã có ảnh, giá và tồn kho thật. Phiên bản GUI chưa tự đăng sản phẩm lên hai sàn, thao tác cuối cần người quản lý thực hiện.</div>`}
 function memoryView(){const ls=data.learnings;return `${pageHead('✧ LONG TERM MEMORY','Bộ nhớ <span class="gradient-text">AI tự học</span>','Lưu kinh nghiệm có nguồn và trạng thái kiểm chứng để các agent có thể sử dụng.',eButton('+ Thêm bài học','onclick="showLearningForm()"'))}<div class="two-cols"><section class="panel"><div class="panel-head"><h3>Thẻ kiến thức được lưu</h3><small>${ls.length} bài học</small></div>${ls.length?ls.map(l=>`<div style="padding:17px;border-bottom:1px solid #244253"><div>${tag(l.validation)} ${tag(l.category)}</div><h3 style="font-size:14px;margin:9px 0 4px">${h(l.title)}</h3><p class="tagline" style="margin:0">${h(l.description)}</p><small style="color:#658fa8">${h(l.source)||'Chưa đính kèm nguồn'} • ${fmtDate(l.created_at)}</small></div>`).join(''):empty('🧠','Bộ nhớ còn trống','Tạo bài học đầu tiên từ thực chiến hoặc tài liệu đã xác minh.')}</section><section class="panel padded"><h3>Vòng lặp học hỏi</h3>${[['1','Đọc nguồn đã cho phép'],['2','Đưa ra giả thuyết'],['3','Thử nghiệm thực tế'],['4','Đánh giá kết quả'],['5','Lưu bài học đã kiểm chứng']].map(([n,t])=>`<div class="info-row"><span class="number-dot">${n}</span><strong>${t}</strong></div>`).join('')}<div class="note warning" style="margin-top:15px">Bản GUI hiện lưu kiến thức thủ công; chưa có dịch vụ nghiên cứu tự động chạy nền. Mở rộng này cần kết nối workflow AI.</div></section></div>`}
-function telegramView(){return `${pageHead('➤ TELEGRAM CONNECTOR','Telegram <span class="gradient-text">Bot</span>','Nhận ảnh sản phẩm 3D và tạo nhiệm vụ cho từng shop.')}
- <div class="two-cols"><section class="panel padded"><h3>📨 Gửi ảnh từ điện thoại đến máy tính</h3><p class="tagline">Tính năng này dùng lại bot Telegram từ bộ mã nguồn Python trước đó. Giao diện hiện cho bạn thấy hướng dẫn cấu hình, không tự kết nối bot.</p><div class="info-row"><span class="ic">1</span><div><strong>Đặt token và ID của người được phép</strong><p>Biến môi trường <code>TEA_TELEGRAM_TOKEN</code> và <code>TEA_TELEGRAM_ALLOWED_IDS</code>.</p></div></div><div class="info-row"><span class="ic">2</span><div><strong>Chạy bot</strong><p>Mở Terminal trong <code>legacy/tea_ai_local</code> và chạy <code>python telegram_listing_bot.py</code>.</p></div></div><div class="info-row"><span class="ic">3</span><div><strong>Gửi ảnh + chú thích</strong><p>Bot tạo hàng đợi và lưu ảnh vào cơ sở dữ liệu, giao diện hiển thị lại khi nhấn Làm mới.</p></div></div></section><section class="panel padded"><h3>Mẫu tin nhắn</h3><div style="background:#0a1c2e;border:1px solid #31556b;border-radius:12px;padding:18px;white-space:pre-line;line-height:2">SKU=TRA-001<br>MODE=new<br>ACCOUNTS=shopee_01,tiktok_01</div><button class="small-btn" style="margin-top:15px" onclick="copyText('SKU=TRA-001\nMODE=new\nACCOUNTS=shopee_01,tiktok_01')">Sao chép mẫu tin nhắn</button><div class="note warning" style="margin-top:18px">Không chia sẻ token bot, mật khẩu, cookies hoặc OTP vào đoạn chat hay ảnh chụp màn hình.</div></section></div>`}
+const agentName={ceo:'AI CEO',strategy:'AI Strategy',compliance:'AI Compliance',
+ research:'AI Research',creative:'AI Creative',analyst:'AI Analyst'};
+function openaiSettingsSection(){
+ const cfg=data.connection_settings||{},router=data.model_routing||{},enabled=new Set(cfg.openai_agents||[]);
+ const models=cfg.openai_models||{};
+ return `<section class="panel padded"><h3>✦ Cài đặt ChatGPT / OpenAI API</h3>
+ <p class="tagline">Nhập API key ngay tại đây. Phần mềm lưu trong kho mật khẩu Windows. Chỉ các agent bạn chọn mới sử dụng OpenAI trả phí.</p>
+ <form id="openaiSettingsForm" onsubmit="saveOpenaiSettings(event)">
+ <div class="field"><label>OpenAI API Key</label>
+ <input type="password" name="api_key" autocomplete="new-password" placeholder="${cfg.openai_key_configured?'Đã lưu khóa – để trống nếu không đổi':'Nhập API key tại đây (không đưa vào GitHub)'}">
+ <small>${cfg.openai_key_configured?'✓ Có API key đã lưu':'Chưa lưu API key'}</small></div>
+ <div class="field"><label>Giới hạn chi phí ước tính mỗi tháng (USD)</label>
+ <input type="number" name="monthly_limit_usd" min="1" max="1000" step="0.5" required value="${Number(cfg.monthly_limit_usd||12)}"></div>
+ <div class="table-wrap"><table class="data-table"><thead><tr><th>Vị trí</th><th>Nhà cung cấp</th><th>Model OpenAI</th></tr></thead>
+ <tbody>${['ceo','strategy','compliance','research','creative','analyst'].map(a=>`
+ <tr><td><strong>${agentName[a]}</strong></td>
+ <td><select name="provider_${a}"><option value="ollama" ${!enabled.has(a)?'selected':''}>Ollama (miễn phí cục bộ)</option>
+ <option value="openai" ${enabled.has(a)?'selected':''}>OpenAI API (trả phí)</option></select></td>
+ <td><select name="model_${a}">
+ ${['gpt-6.1-sol','gpt-6-luna'].map(x=>`<option value="${x}" ${models[a]===x?'selected':''}>${x}</option>`).join('')}
+ </select></td></tr>`).join('')}</tbody></table></div>
+ <div class="note">Khuyên dùng: bật OpenAI cho CEO trước. API ChatGPT được tính phí riêng với gói ChatGPT Plus. Thay đổi có hiệu lực ở nhiệm vụ tiếp theo.</div>
+ <div class="form-bottom" style="display:flex;gap:10px;flex-wrap:wrap">
+ <button class="primary-btn" type="submit">Lưu cấu hình ChatGPT</button>
+ <button class="small-btn" type="button" onclick="testConnection('openai')">✓ Kiểm tra API key</button></div></form>
+ <div class="tagline" style="margin-top:12px">Chi phí OpenAI ước tính trong tháng: ${Number(data.openai_usage?.estimated_usd||0).toFixed(4)} USD • ${Number(data.openai_usage?.calls||0)} lượt gọi.</div>
+ </section>`;
+}
+function telegramSettingsSection(){
+ const cfg=data.connection_settings||{},bot=data.telegram_process||{};
+ return `<section class="panel padded"><h3>➤ Cài đặt Telegram Bot</h3>
+ <p class="tagline">Lưu token, ID người được phép và điều khiển Bot bằng nút trên giao diện.</p>
+ <form id="telegramSettingsForm" onsubmit="saveTelegramSettings(event)">
+ <div class="field"><label>Bot Token (tạo bằng @BotFather)</label>
+ <input type="password" name="bot_token" autocomplete="new-password"
+ placeholder="${cfg.telegram_token_configured?'Đã lưu token – để trống để giữ nguyên':'Dán bot token ở đây'}">
+ <small>${cfg.telegram_token_configured?'✓ Có token được lưu trong Windows':'Chưa lưu Telegram Bot Token'}</small></div>
+ <div class="field"><label>Telegram User ID được phép (phân cách bằng dấu phẩy)</label>
+ <input name="telegram_allowed_ids" value="${h((cfg.telegram_allowed_ids||[]).join(','))}" placeholder="123456789" required>
+ <small>Chỉ những tài khoản có User ID trong danh sách mới được điều khiển Bot. Không dùng tên @username.</small></div>
+ <label class="checkbox-line"><input type="checkbox" name="telegram_autostart" ${cfg.telegram_autostart?'checked':''}>
+ Tự chạy Telegram Bot khi khởi động Mars Studio</label>
+ <div class="form-bottom" style="display:flex;gap:8px;flex-wrap:wrap">
+ <button class="primary-btn" type="submit" ${bot.running?'disabled':''}>Lưu Telegram</button>
+ <button class="small-btn" type="button" onclick="testConnection('telegram')">✓ Kiểm tra token</button>
+ <button class="small-btn" type="button" onclick="controlTelegram('start')" ${bot.running?'disabled':''}>▶ Bật Bot</button>
+ <button class="small-btn" type="button" onclick="controlTelegram('stop')" ${bot.running?'':'disabled'}>■ Tắt Bot</button></div>
+ </form>
+ <div class="note" style="margin-top:12px">${bot.running?'🟢 Telegram Bot đang chạy':'⚪ Telegram Bot chưa chạy'} • ${h(bot.message||'')}.
+ Bot nhận ảnh và bản nháp theo chức năng hiện có, không tự đăng sản phẩm lên sàn.</div>
+ <div class="tagline">Để tạo Bot: vào Telegram → tìm <strong>@BotFather</strong> → gửi /newbot. Bạn cần biết User ID dạng số của tài khoản được phép sử dụng.</div>
+ </section>`;
+}
+function settingsView(){return `${pageHead('⚙ LOCAL INTEGRATIONS','Cài đặt <span class="gradient-text">ChatGPT & Telegram</span>',
+ 'Cấu hình trực tiếp tại đây – không sửa file .env và không chạy lệnh cấu hình.', '')}
+ <div class="two-cols">${openaiSettingsSection()}${telegramSettingsSection()}</div>`;}
+function telegramView(){return `${pageHead('➤ TELEGRAM CONNECTOR','Telegram <span class="gradient-text">Bot</span>',
+ 'Thiết lập và vận hành bot nhận ảnh ngay trong phần mềm.',eButton('⚙ Cài đặt cả ChatGPT','onclick="navigate(\'settings\')"'))}
+ <div class="two-cols">${telegramSettingsSection()}
+ <section class="panel padded"><h3>Mẫu gửi ảnh sản phẩm</h3>
+ <div class="note" style="white-space:pre-wrap">SKU=TRA-001
+MODE=new
+ACCOUNTS=shopee_01,tiktok_01</div>
+ <button class="small-btn" style="margin-top:15px" onclick="copyText('SKU=TRA-001\\nMODE=new\\nACCOUNTS=shopee_01,tiktok_01')">Sao chép mẫu</button>
+ <div class="note warning" style="margin-top:18px">Không gửi mật khẩu, OTP, cookie Shopee hoặc OpenAI API key qua Telegram. Cần được cấp quyền Bot trước khi dùng.</div></section></div>`;}
+async function saveOpenaiSettings(event){
+ event.preventDefault();
+ const form=event.target,entries=new FormData(form),agents=['ceo','strategy','compliance','research','creative','analyst'];
+ const payload={api_key:entries.get('api_key')||'',monthly_limit_usd:Number(entries.get('monthly_limit_usd')),
+  openai_agents:agents.filter(a=>entries.get('provider_'+a)==='openai'),
+  openai_models:Object.fromEntries(agents.map(a=>[a,entries.get('model_'+a)]))};
+ try{const r=await api('settings/openai',payload);toast(r.message||'Đã lưu OpenAI');await refresh()}
+ catch(e){toast(e.message,true)}
+}
+async function saveTelegramSettings(event){
+ event.preventDefault();
+ const form=event.target,e=new FormData(form);
+ const payload={bot_token:e.get('bot_token')||'',telegram_allowed_ids:e.get('telegram_allowed_ids')||'',
+ telegram_autostart:e.get('telegram_autostart')==='on'};
+ try{const r=await api('settings/telegram',payload);toast(r.message||'Đã lưu Telegram');await refresh()}
+ catch(err){toast(err.message,true)}
+}
+async function testConnection(target){
+ try{toast('Đang kiểm tra kết nối '+target+'...');const r=await api('settings/'+target+'/test',{check:true});
+ toast((r.message||'Kết nối thành công')+(r.bot_username?' (@'+r.bot_username+')':'')+
+  (r.unlisted_models?.length?' • Model chưa xuất hiện trong danh sách: '+r.unlisted_models.join(', '):''));}
+ catch(e){toast('Kết nối '+target+' thất bại: '+e.message,true)}
+}
+async function controlTelegram(action){
+ try{
+  const r=await api('settings/telegram/'+action,{action:true});
+  toast(r.telegram?.message||'Đã cập nhật Bot');await refresh();
+ }catch(e){toast('Telegram Bot: '+e.message,true)}
+}
 function domView(){const ss=data.training||[];const isActive=ss.some(s=>['starting','recording','saving'].includes(s.status));return `${pageHead('◉ BROWSER LEARNING','Học thao tác <span class="gradient-text">đăng sản phẩm</span>','Bấm bắt đầu trong phần mềm → làm mẫu trên trình duyệt → bấm dừng để lưu DOM và các bước.',eButton('◉ Bắt đầu học','onclick="showTrainForm()"'))}
  <div class="two-cols"><section class="panel"><div class="panel-head"><h3>Các phiên học thao tác</h3><small>${ss.length} phiên</small></div><div class="table-wrap">${ss.length?`<table class="data-table"><thead><tr><th>Profile</th><th>Nguồn</th><th>Trạng thái</th><th>Số thao tác</th><th>Điều khiển</th></tr></thead><tbody>${ss.map(x=>`<tr><td><strong>${h(x.account_id)}</strong><div class="tagline">${h(x.mode)}</div></td><td>${tag(x.target)}</td><td>${tag(x.status)}<div class="tagline">${h(x.message||'')}</div></td><td>${x.events_count||0}</td><td><div class="inline-actions">${['starting','recording'].includes(x.status)?`<button class="small-btn stop-btn" onclick="stopTraining('${x.id}')">■ Dừng & lưu</button>`:''}<button class="small-btn" onclick="showTrainingDetail('${x.id}')">Xem dữ liệu</button></div></td></tr>`).join('')}</tbody></table>`:empty('⌘','Chưa có phiên học','Nhấn Bắt đầu học để mở trang mẫu và ghi thao tác thủ công.')}</div></section>
  <section class="panel padded"><h3>🖱 Học bằng nút bấm</h3>${[['1','Chọn gian hàng','Chọn profile Chrome và loại công việc tạo mới/cập nhật.'],['2','Bấm Bắt đầu học','Phần mềm mở trình duyệt theo profile bạn đã đăng nhập.'],['3','Bạn thao tác mẫu','Bấm vào form, nhập dữ liệu, chọn ảnh như bình thường.'],['4','Bấm Dừng & lưu','AI lưu thẻ input/textarea/select, label và chuỗi tương tác để bạn kiểm tra.']].map(x=>`<div class="info-row"><span class="ic">${x[0]}</span><div><strong>${x[1]}</strong><p>${x[2]}</p></div></div>`).join('')}<div class="note warning" style="margin-top:15px">Mặc định học trên form demo nội bộ. Chỉ chọn Seller Center khi bạn có quyền sử dụng công cụ ghi thao tác theo điều khoản nền tảng. Không thu dữ liệu đã nhập, mật khẩu, OTP hoặc cookie. Không tự bấm đăng.</div></section></div>`}
-function render(){document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===activeView));$('#breadcrumb').textContent=labels[activeView];const views={hq:home,agents:agentsView,missions:missionsView,forum:forumView,shops:shopsView,proxies:proxiesView,products:productsView,jobs:jobsView,memory:memoryView,telegram:telegramView,dom:domView};$('#mainContent').innerHTML=(views[activeView]||home)();if(activeView==='hq'&&sceneMode==='mars'){if($('#marsSvg'))$('#marsSvg').style.transform=`scale(${sceneScale})`;document.querySelectorAll('.room').forEach(el=>{el.addEventListener('click',()=>el.dataset.agent?openAgent(el.dataset.agent):navigate(el.dataset.view));el.addEventListener('keydown',e=>{if(e.key==='Enter')el.click()})})}}
+function render(){document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===activeView));$('#breadcrumb').textContent=labels[activeView];const views={hq:home,agents:agentsView,missions:missionsView,forum:forumView,settings:settingsView,shops:shopsView,proxies:proxiesView,products:productsView,jobs:jobsView,memory:memoryView,telegram:telegramView,dom:domView};$('#mainContent').innerHTML=(views[activeView]||home)();if(activeView==='hq'&&sceneMode==='mars'){if($('#marsSvg'))$('#marsSvg').style.transform=`scale(${sceneScale})`;document.querySelectorAll('.room').forEach(el=>{el.addEventListener('click',()=>el.dataset.agent?openAgent(el.dataset.agent):navigate(el.dataset.view));el.addEventListener('keydown',e=>{if(e.key==='Enter')el.click()})})}}
 function openAgent(id){const a=data.agents.find(x=>x.id===id);if(!a)return;const ms=data.missions.filter(m=>m.agent_id===id);openModal(`<div class="eyebrow">PHÒNG BAN AI – CHỈ XEM</div><div style="font-size:43px;margin:14px 0">${a.emoji}</div><h2>${a.name}</h2><p class="sub">${a.room} • ${a.role}</p><div class="note">Bạn chỉ giao nhiệm vụ cho AI CEO. ${a.id==='ceo'?'AI CEO tiếp nhận và điều phối toàn bộ công việc.':'Đây là phòng ban nội bộ, nhận việc qua AI CEO khi chức năng điều phối được kích hoạt.'}</div><h3 style="margin-top:24px">Nhiệm vụ liên quan (${ms.length})</h3>${ms.length?ms.slice(0,4).map((m,i)=>miniTaskRow(m,i)).join(''):'<div class="empty-sm">Chưa có nhiệm vụ trong hàng đợi</div>'}<button class="primary-btn" style="margin-top:20px" onclick="closeModal();showMissionForm()">👑 Giao việc cho AI CEO</button>`)}
 function showMissionForm(){openModal(`<div class="eyebrow">CEO COMMAND CENTER</div><h2>Giao nhiệm vụ cho AI CEO</h2><p class="sub">Bạn chỉ trao đổi với AI CEO. CEO sẽ phân tích, lập kế hoạch, phân công cho các phòng ban và báo cáo về cho bạn khi quy trình điều phối AI được kết nối.</p><form id="missionForm"><input type="hidden" name="agent_id" value="ceo"><div class="note">👑 Người tiếp nhận duy nhất: <b>AI CEO</b></div><div class="field"><label>Tiêu đề nhiệm vụ</label><input name="title" required minlength="3" placeholder="Ví dụ: Phân tích kế hoạch bán trà đinh lăng" maxlength="150"></div><div class="field"><label>Yêu cầu chi tiết</label><textarea name="detail" maxlength="2000" placeholder="Mục tiêu, sản phẩm, nền tảng, thời hạn..."></textarea></div><div class="form-bottom"><button class="primary-btn">Gửi nhiệm vụ cho CEO</button><span class="hint">Hiện chỉ lưu vào hàng đợi; CEO tự điều phối chưa được kích hoạt.</span></div></form>`);$('#missionForm').addEventListener('submit',async e=>{e.preventDefault();await submitForm('missions',e.target)})}
 function showCEOReport(id){
