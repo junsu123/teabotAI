@@ -100,3 +100,19 @@
 .modal:has(#missionForm) .video-form-grid textarea{resize:vertical}
 .modal:has(#missionForm) .form-bottom{position:sticky;bottom:-27px;z-index:2;background:#102c3b;padding:13px 0 4px;display:flex;gap:12px;align-items:center;border-top:1px solid #32556b}
 @media(max-width:750px){.modal:has(#missionForm){padding:17px}.modal:has(#missionForm) .form-bottom{bottom:-17px;flex-wrap:wrap}.modal:has(#missionForm) .form-bottom button{width:100%}}
+
+/* Product-focused SEO, retail price and five-scene Veo prompt UI. */
+.veo-base-panel{margin:14px 0 19px}
+.veo-base-panel details{margin-top:12px}
+.veo-base-panel details summary{cursor:pointer;font-weight:700;color:#b7ece2;padding:8px 0}
+.veo-base-panel textarea{width:100%;margin-top:7px;min-height:144px;font:12px/1.6 ui-monospace,Consolas,monospace}
+.video-scene-card{border:1px solid #376b76;border-radius:12px;background:#0b2739;margin:10px 0;padding:14px}
+.video-scene-card h4{margin:3px 0;font-size:13px;color:#d3f8ed}
+.video-scene-card pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.6;color:#d9eaf0;max-width:100%}
+.video-detail-section .small-btn{margin:7px 0}
+.modal:has(.video-scene-card){max-width:min(880px,95vw)}
+@media(max-width:700px){
+ .video-scene-card{padding:10px}
+ .video-scene-card .video-work-top{flex-direction:column;gap:3px}
+ .modal:has(.video-scene-card){padding:16px}
+}
