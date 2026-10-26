@@ -102,10 +102,11 @@ function missionsView(){const ms=data.missions;return `${pageHead('👑 CEO COMM
 ${['ceo','strategy','compliance','research','creative','analyst'].map(agent=>{const config=(data.model_routing?.routes||{})[agent]||{provider:'ollama'};
 return `<div style="border:1px solid #315062;border-radius:10px;padding:12px">
 <strong>${h(actorName(agent))}</strong><div class="tagline">${config.provider==='openai'?'OpenAI – '+h(config.model):config.provider==='claude'?'Claude – '+h(config.model):config.provider==='auto'?'Tự động – '+h(config.model):config.provider==='gemini'?'Gemini – '+h(config.model):config.provider==='groq'?'Groq – '+h(config.model):'Ollama – Máy cá nhân'}</div></div>`}).join('')}
-</div><div class="note">API AI: ${(data.model_routing?.claude_agents?.length||data.model_routing?.openai_agents?.length)?((data.model_routing?.claude_key_configured||data.model_routing?.openai_key_configured)?'Đã lưu ít nhất một API key':'⚠️ Chưa lưu API key'):'Chưa bật (không phát sinh phí API)'}.
-Chi phí API tháng này (ước tính): ${Number(data.openai_usage?.estimated_usd||0).toFixed(3)} USD; giới hạn cục bộ ${data.model_routing?.monthly_limit_usd??12} USD/tháng.
+</div><div class="note">Ưu tiên: ${h((data.model_routing?.priority||[]).join(' → '))}. Gemini: ${data.model_routing?.gemini_key_configured?'Đã lưu key':'Chưa lưu key'}; Groq: ${data.model_routing?.groq_key_configured?'Đã lưu key':'Chưa lưu key'}.
+<br>Cho phép dự phòng trả phí: ${data.model_routing?.allow_paid_fallback?'Có':'Không'}.
+<br>Chi phí Claude/OpenAI ghi nhận (ước tính): ${(Number(data.claude_usage?.estimated_usd||0)+Number(data.openai_usage?.estimated_usd||0)).toFixed(4)} USD tháng này.
 <br>Ollama: ${data.ollama?.running?(data.ollama.model_ready?'Đã kết nối – '+h(data.ollama.model):'Đang chạy, chưa tải model '+h(data.ollama.model)):'Chưa kết nối'}.
-<br>Thông tin này là trạng thái cấu hình, không phải bảo đảm dịch vụ OpenAI đang sẵn sàng. Nhiệm vụ được xử lý theo thứ tự.</div></div>`}
+<br>Thông tin này là cấu hình và trạng thái kết nối, không bảo đảm API luôn sẵn sàng; kết quả thử kết nối có trong trang Cài đặt AI.</div></div>`}
 
 function kindText(kind){
  return ({assignment:'Giao việc',proposal:'Đề xuất',question:'Câu hỏi',objection:'Phản biện / trả lời',
