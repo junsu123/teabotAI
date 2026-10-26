@@ -103,11 +103,11 @@ function agentsView(){return `${pageHead('♟ TEAM MANAGEMENT','Nhân viên <spa
 function videoRoomView(){
  const results=data.video_productions||[];
  const stages={research_pending:'Chờ nghiên cứu TikTok',research_complete:'Đã nghiên cứu',script_complete:'Đã soạn kịch bản',
- needs_review:'Chờ kiểm duyệt/chỉnh sửa',awaiting_video_render:'Đã chuyển Phòng Video AI',blocked:'Tạm dừng do lỗi'};
- return `${pageHead('▧ VIDEO WORKFLOW','Phòng <span class="gradient-text">TikTok & Video AI</span>',
-  'AI CEO điều phối nghiên cứu tham chiếu → viết kịch bản → kiểm duyệt → chuẩn bị storyboard. Chưa tự render hoặc đăng MP4.',
-  eButton('👑 Giao brief sản phẩm','onclick="showMissionForm()"'))}
- <div class="video-flow"><span>🔎 Nghiên cứu TikTok</span><b>→</b><span>✍️ Biên kịch</span><b>→</b><span>🛡️ Kiểm duyệt</span><b>→</b><span>🎬 Phòng Video AI</span></div>
+ needs_review:'Chờ kiểm duyệt/chỉnh sửa',awaiting_video_render:'Đã có 5 prompt Veo 3',blocked:'Tạm dừng do lỗi'};
+ return `${pageHead('▧ VIDEO WORKFLOW','Phòng <span class="gradient-text">SEO & Video AI</span>',
+  'Bộ nội dung theo sản phẩm: tiêu đề SEO, mô tả SEO, nghiên cứu giá, kịch bản 40 giây và 5 prompt Veo 3. Chưa tự render MP4.',
+  eButton('👑 Tạo bộ nội dung sản phẩm','onclick="showMissionForm()"'))}
+ <div class="video-flow"><span>🔎 Giá & thị trường</span><b>→</b><span>🏷 SEO</span><b>→</b><span>🎞️ Kịch bản 40s</span><b>→</b><span>🛡️ Duyệt</span><b>→</b><span>🎬 5 × 8s Veo 3</span></div>
 
  <section class="panel padded veo-base-panel">
  <div class="video-work-top"><div><h3>🧩 Prompt gốc Google Veo 3</h3>
@@ -126,7 +126,7 @@ function videoRoomView(){
  <div class="video-work-top"><div><div class="eyebrow">NHIỆM VỤ #${v.mission_id}</div><h3>${h(v.product_name)}</h3></div><span class="video-stage">${h(stages[v.status]||v.status)}</span></div>
  <div class="tagline">Thành phần: ${h(brief.ingredients||'Chưa cung cấp')}</div>
  <div class="video-asset-links">${badges||'Không có tệp đính kèm'}</div>
- <div class="video-card-actions"><button class="small-btn" onclick="showVideoRoomDetail(${v.mission_id})">Xem nghiên cứu · Kịch bản · Storyboard</button>
+ <div class="video-card-actions"><button class="small-btn" onclick="showVideoRoomDetail(${v.mission_id})">Xem 5 đầu ra SEO & Video</button>
  <button class="small-btn" onclick="showCEOReport(${v.mission_id})">Báo cáo CEO</button></div>
  </article>`;}).join(''):empty('🎬','Chưa có dự án video','Giao brief sản phẩm cho AI CEO để khởi chạy quy trình.')}
  <div class="note">Các URL TikTok chỉ được lưu làm tham chiếu. Nghiên cứu nội dung cần ghi chú hoặc transcript mà chủ cung cấp; hệ thống không tự truy cập video riêng tư. Giấy công bố chưa được xác nhận pháp lý chỉ là tư liệu tham khảo.</div>`;
