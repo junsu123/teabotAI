@@ -29,6 +29,10 @@ class ForumTests(unittest.TestCase):
             forum.record(self.db,12,"owner","research","question","Bypass CEO")
         with self.assertRaises(ValueError):
             forum.record(self.db,12,"creative","owner","decision","Bypass owner")
+        with self.assertRaises(ValueError):
+            forum.record(self.db,12,"creative","ceo","decision","Nhân viên chốt trái quyền")
+        with self.assertRaises(ValueError):
+            forum.record(self.db,12,"strategy","research","assignment","Phân công không qua CEO")
 
     def test_debate_has_question_reply_and_revision(self):
         calls=[]
