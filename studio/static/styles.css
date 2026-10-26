@@ -94,3 +94,9 @@
 .video-detail-section summary{cursor:pointer;font-weight:750;color:#d3f8ef}
 .video-detail-section pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;max-height:440px;overflow:auto;font-family:inherit;font-size:12px;color:#d0e5ec;line-height:1.6;margin:12px 0 0}
 @media(max-width:750px){.video-form-grid{grid-template-columns:1fr}.video-flow{gap:7px;padding:9px}.video-flow span{font-size:11px}.video-work-top h3{font-size:16px}}
+
+/* Let the CEO product-video brief use a comfortable form width. */
+.modal:has(#missionForm){max-width:min(900px,95vw)}
+.modal:has(#missionForm) .video-form-grid textarea{resize:vertical}
+.modal:has(#missionForm) .form-bottom{position:sticky;bottom:-27px;z-index:2;background:#102c3b;padding:13px 0 4px;display:flex;gap:12px;align-items:center;border-top:1px solid #32556b}
+@media(max-width:750px){.modal:has(#missionForm){padding:17px}.modal:has(#missionForm) .form-bottom{bottom:-17px;flex-wrap:wrap}.modal:has(#missionForm) .form-bottom button{width:100%}}
