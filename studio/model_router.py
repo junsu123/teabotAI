@@ -219,6 +219,9 @@ def _record_actual_provider(db_file,agent,provider):
 def chat(agent, prompt, local_chat, db_file, env=None, transport=None):
     env=os.environ if env is None else env
     selected=provider_for(agent,env)
+    free_only=env.get("TEA_FREE_ONLY","0")=="1"
+    if free_only and selected in ("claude","openai"):
+        raise RuntimeError("Đang bật chế độ CHỈ MODEL CÓ GÓI MIỄN PHÍ, không gọi Claude/OpenAI API trả phí.")
     if selected!="auto":
         result=_call_provider(selected,agent,prompt,local_chat,db_file,env,transport)
         _record_actual_provider(db_file,agent,selected)
@@ -226,7 +229,7 @@ def chat(agent, prompt, local_chat, db_file, env=None, transport=None):
     # Free-first auto routing: Gemini → Groq → Ollama.
     # Claude/OpenAI are included only with user's explicit paid-fallback opt-in.
     order=_priority(env)
-    paid_allowed=env.get("TEA_ALLOW_PAID_FALLBACK","0")=="1"
+    paid_allowed=(not free_only) and env.get("TEA_ALLOW_PAID_FALLBACK","0")=="1"
     errors=[]
     for provider in order:
         if provider in ("claude","openai") and not paid_allowed:
@@ -255,6 +258,7 @@ def configuration_status(env=None):
     import free_cloud_providers as cloud
     routes={}
     order=_priority(env)
+    free_only=env.get("TEA_FREE_ONLY","0")=="1"
     for agent in sorted(VALID_AGENTS):
         provider=provider_for(agent,env)
         if provider=="claude":
@@ -267,12 +271,13 @@ def configuration_status(env=None):
             model=env.get("TEA_GROQ_MODEL_"+agent.upper(),cloud.GROQ_DEFAULT[agent])
         elif provider=="auto":
             model=" → ".join(p for p in order if p not in ("claude","openai")
-                           or env.get("TEA_ALLOW_PAID_FALLBACK")=="1")
+                           or (not free_only and env.get("TEA_ALLOW_PAID_FALLBACK")=="1"))
         else:model=""
         routes[agent]={"provider":provider,"model":model}
     return {"language":"vi",
        "priority":list(order),
-       "allow_paid_fallback":env.get("TEA_ALLOW_PAID_FALLBACK","0")=="1",
+       "free_only":free_only,
+       "allow_paid_fallback":(not free_only) and env.get("TEA_ALLOW_PAID_FALLBACK","0")=="1",
        "openai_agents":[a for a,x in routes.items() if x["provider"]=="openai"],
        "claude_agents":[a for a,x in routes.items() if x["provider"]=="claude"],
        "auto_agents":[a for a,x in routes.items() if x["provider"]=="auto"],
