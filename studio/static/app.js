@@ -255,17 +255,17 @@ function aiSettingsSection(){
  const provider=providers[a]||'auto';
  return `<article class="integration-agent-card">
  <h4>${agentName[a]} <span class="integration-agent-meta">· ${a==='ceo'?'Quyết định':a==='creative'||a==='analyst'?'Tác vụ nhẹ':'Chuyên môn'}</span></h4>
- <div class="field integration-agent-provider"><label>Nhà cung cấp</label><select name="provider_${a}">
+ <div class="field integration-agent-provider"><label>Nhà cung cấp</label><select name="provider_${a}" aria-label="Nhà cung cấp cho ${agentName[a]}">
  ${[['auto','Tự động: Gemini → Groq → Ollama'],['gemini','Gemini (có Free Tier)'],['groq','Groq (có Free Plan)'],['claude','Claude (trả phí)'],['openai','OpenAI (trả phí)'],['ollama','Ollama cục bộ']].map(p=>`<option value="${p[0]}" ${p[0]===provider?'selected':''} ${cfg.free_only!==false&&['claude','openai'].includes(p[0])?'disabled':''}>${p[1]}</option>`).join('')}
  </select></div>
  <div class="integration-agent-fields">
- <div class="field"><label>Gemini chính</label><select name="gemini_model_${a}">${['gemini-3.8-flash','gemini-3.6-flash','gemini-3.5-flash-lite','gemini-3.1-flash-lite','gemini-2.5-flash','gemini-2.5-flash-lite'].map(m=>`<option value="${m}" ${m===(cfg.gemini_models?.[a]||(a==='creative'||a==='analyst'?'gemini-3.5-flash-lite':'gemini-3.8-flash'))?'selected':''}>${m}</option>`).join('')}</select></div>
- <div class="field"><label>Groq dự phòng</label><select name="groq_model_${a}">${['openai/gpt-oss-120b','openai/gpt-oss-20b','qwen/qwen3.8-27b'].map(m=>`<option value="${m}" ${m===(cfg.groq_models?.[a]||(a==='creative'||a==='analyst'?'openai/gpt-oss-20b':'openai/gpt-oss-120b'))?'selected':''}>${m}</option>`).join('')}</select></div></div>
+ <div class="field"><label>Gemini chính</label><select name="gemini_model_${a}" aria-label="Model Gemini cho ${agentName[a]}">${['gemini-3.8-flash','gemini-3.6-flash','gemini-3.5-flash-lite','gemini-3.1-flash-lite','gemini-2.5-flash','gemini-2.5-flash-lite'].map(m=>`<option value="${m}" ${m===(cfg.gemini_models?.[a]||(a==='creative'||a==='analyst'?'gemini-3.5-flash-lite':'gemini-3.8-flash'))?'selected':''}>${m}</option>`).join('')}</select></div>
+ <div class="field"><label>Groq dự phòng</label><select name="groq_model_${a}" aria-label="Model Groq cho ${agentName[a]}">${['openai/gpt-oss-120b','openai/gpt-oss-20b','qwen/qwen3.8-27b'].map(m=>`<option value="${m}" ${m===(cfg.groq_models?.[a]||(a==='creative'||a==='analyst'?'openai/gpt-oss-20b':'openai/gpt-oss-120b'))?'selected':''}>${m}</option>`).join('')}</select></div></div>
  <details class="integration-expander"><summary>Model trả phí</summary>
- <div class="integration-agent-fields"><div class="field"><label>Claude</label><select name="claude_model_${a}">
+ <div class="integration-agent-fields"><div class="field"><label>Claude</label><select name="claude_model_${a}" aria-label="Model Claude cho ${agentName[a]}">
  ${['claude-sonnet-4-6','claude-opus-4-6','claude-haiku-4-5'].map(m=>`<option value="${m}" ${m===(claudeModels[a]||'claude-sonnet-4-6')?'selected':''}>${m}</option>`).join('')}
  </select></div>
- <div class="field"><label>OpenAI</label><select name="openai_model_${a}">
+ <div class="field"><label>OpenAI</label><select name="openai_model_${a}" aria-label="Model OpenAI cho ${agentName[a]}">
  ${['gpt-6.1-sol','gpt-6-luna'].map(m=>`<option value="${m}" ${m===(openaiModels[a]||'gpt-6-luna')?'selected':''}>${m}</option>`).join('')}
  </select></div></div></details></article>`}).join('')}</div></details>
  <details class="integration-expander">
