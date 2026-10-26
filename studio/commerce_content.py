@@ -77,6 +77,28 @@ def state(path,mid,status):
     with connect(path) as con:
         con.execute("UPDATE commerce_outputs SET status=?,updated_at=? WHERE mission_id=?",(status,now(),mid))
 
+def parse_seo(response):
+    source=str(response or "").strip()
+    tick=chr(96)*3
+    if source.startswith(tick):
+        source=re.sub(r"^\s*"+re.escape(tick)+r"(?:json)?\s*|\s*"+
+                      re.escape(tick)+r"\s*$","",source,flags=re.I)
+    try:data=json.loads(source)
+    except (TypeError,ValueError):
+        raise ValueError("AI chưa trả JSON SEO theo cấu trúc yêu cầu") from None
+    if not isinstance(data,dict):
+        raise ValueError("Nội dung SEO không hợp lệ")
+    titles=data.get("titles")
+    description=data.get("description")
+    if (not isinstance(titles,list) or len(titles)<2 or len(titles)>5
+        or any(not isinstance(t,str) or len(t.strip())<15 or len(t)>190
+               for t in titles)
+        or not isinstance(description,str)
+        or not 80<=len(description.strip())<=6000):
+        raise ValueError("Cần 2-5 tiêu đề ngắn và mô tả SEO đầy đủ")
+    return "\n".join(str(i)+". "+v.strip() for i,v in enumerate(titles,1)),description.strip()
+
+
 def parse_five_scenes(response):
     """No silent fabrication: exactly 5 individually usable prompts of 8s."""
     source=str(response or "").strip()
