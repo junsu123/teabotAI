@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from io import BytesIO
 from urllib.error import HTTPError
 
 STUDIO=Path(__file__).resolve().parents[1]
@@ -137,6 +138,31 @@ class FreeFirstTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["supported_models"],[])
         self.assertIn("Không có model",result["warning"])
+
+    def test_groq_403_org_permission_code_is_explained_without_leaks(self):
+        secret="DONOT_ECHO_SECRET"
+        payload=json.dumps({"error":{"type":"permissions_error",
+                    "code":"model_permission_blocked_org",
+                    "message":"Blocked; leaked "+secret}}).encode()
+        def blocked(req):
+            raise HTTPError(req.full_url,403,"Forbidden",hdrs=None,fp=BytesIO(payload))
+        with self.assertRaisesRegex(RuntimeError,"cấp tổ chức") as found:
+            settings.test_groq(http=blocked,key_override="gsk-test-placeholder")
+        self.assertNotIn(secret,str(found.exception))
+
+    def test_groq_403_project_permission_code_is_explained(self):
+        payload=json.dumps({"error":{"type":"permissions_error",
+                    "code":"model_permission_blocked_project"}}).encode()
+        def blocked(req):
+            raise HTTPError(req.full_url,403,"Forbidden",hdrs=None,fp=BytesIO(payload))
+        with self.assertRaisesRegex(RuntimeError,"cấp dự án"):
+            settings.test_groq(http=blocked,key_override="gsk-test-placeholder")
+
+    def test_groq_403_unknown_does_not_claim_model_problem(self):
+        def blocked(req):
+            raise HTTPError(req.full_url,403,"Forbidden",hdrs=None,fp=BytesIO(b""))
+        with self.assertRaisesRegex(RuntimeError,"không có quyền"):
+            settings.test_groq(http=blocked,key_override="gsk-test-placeholder")
 
     def test_direct_provider_and_free_key_tests(self):
         cfg=self.setup_free()
