@@ -29,6 +29,7 @@ import browser_listing
 import proxy_store
 import ceo_engine
 import agent_forum
+import product_video_workflow
 import model_router
 import claude_provider
 import integration_settings
@@ -78,6 +79,7 @@ def init():
     id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, message TEXT NOT NULL);
   ''')
  ceo_engine.setup(DB)
+ product_video_workflow.setup(DB)
 
 def utc():return datetime.now().astimezone().isoformat(timespec='seconds')
 
@@ -170,7 +172,11 @@ def overview():
   m['ceo_error']=r.get('error','')
   m['ceo_plan']=r.get('plan','')
   m['delegations']=list(reversed(delegations.get(m['id'],[])))
+ briefs={m['id']:product_video_workflow.get_brief(DB,m['id'],include_doc=False)
+         for m in ms if m['id'] and m.get('agent_id')=='ceo'}
+ briefs={k:v for k,v in briefs.items() if v}
  return {'agents':AGENTS,'accounts':shops,'jobs':jobs,'missions':ms,
+    'video_briefs':briefs,'video_productions':product_video_workflow.list_production(DB),
     'learnings':list_learnings(), 'products':list_products(), 'proxies':proxy_store.all_proxies(), 'training':training_summary(),
     'ollama':ollama_health(),
     'model_routing':model_router.configuration_status(integration_settings.openai_env()),
@@ -220,6 +226,32 @@ class Handler(BaseHTTPRequestHandler):
     return json_reply(self,{'mission':dict(mission),'messages':rows,'count':len(rows),
             'final_decision':next((x['body'] for x in reversed(rows) if x['kind']=='decision' and x['sender']=='ceo'),None)})
    except ValueError as e:return error_reply(self,400,str(e))
+  if path=='/api/mission-asset':
+   try:
+    parts=parse_qs(urlparse(self.path).query)
+    mid=int(parts.get('mission_id',['0'])[0])
+    aid=int(parts.get('asset_id',['0'])[0])
+    if mid<1 or aid<1:raise ValueError('Mã tệp không hợp lệ')
+    asset=product_video_workflow.get_asset(DB,mid,aid)
+    if not asset:return error_reply(self,404,'Không tìm thấy tệp')
+    full=Path(asset['stored_path']).resolve()
+    base=(DATA/'product_missions').resolve()
+    if not full.is_relative_to(base) or not full.is_file():
+     return error_reply(self,404,'Tệp không nằm trong kho dữ liệu')
+    if full.stat().st_size>12*1024*1024:return error_reply(self,413,'Tệp vượt giới hạn')
+    payload=full.read_bytes()
+    self.send_response(200)
+    self.send_header('Content-Type',asset['mime'])
+    self.send_header('Cache-Control','no-store')
+    self.send_header('X-Content-Type-Options','nosniff')
+    self.send_header('Content-Security-Policy',"default-src 'none'; sandbox")
+    self.send_header('Content-Disposition',
+        'inline' if asset['kind']=='image3d' else 'attachment')
+    self.send_header('Content-Length',str(len(payload)))
+    self.end_headers()
+    self.wfile.write(payload)
+    return
+   except (ValueError,TypeError):return error_reply(self,400,'Mã tệp không hợp lệ')
   if path=='/api/settings':return json_reply(self,{'settings':integration_settings.status(),
       'telegram':telegram_manager.status(),'usage':model_router.usage_month(DATA/'openai_usage.sqlite3'),
       'claude_usage':claude_provider.usage_month(DATA/'claude_usage.sqlite3')})
@@ -248,7 +280,8 @@ class Handler(BaseHTTPRequestHandler):
   path=urlparse(self.path).path
   try:
    n=int(self.headers.get('Content-Length','0'))
-   if n<=0 or n>MAX_JSON:raise ValueError('Dữ liệu vượt quá giới hạn')
+   max_size=30*1024*1024 if path=='/api/missions' else MAX_JSON
+   if n<=0 or n>max_size:raise ValueError('Dữ liệu vượt quá giới hạn')
    body=json.loads(self.rfile.read(n))
    if not isinstance(body,dict):raise ValueError('Cần đối tượng JSON')
    if path=='/api/settings/secret/reveal':
@@ -429,7 +462,12 @@ class Handler(BaseHTTPRequestHandler):
     if agent!='ceo':raise ValueError('Chủ doanh nghiệp chỉ giao nhiệm vụ cho AI CEO')
     title=sanitize(body.get('title',''),150)
     detail=sanitize(body.get('detail',''),2000)
-    mid=queue_ceo_mission(title,detail)
+    if body.get('workflow')=='tiktok_video':
+     mid=product_video_workflow.create_mission(DB,DATA,title,detail,body)
+    elif not body.get('workflow'):
+     mid=queue_ceo_mission(title,detail)
+    else:
+     raise ValueError('Loại nhiệm vụ không hợp lệ')
     return json_reply(self,{'ok':True,'mission_id':mid,'recipient':'ceo'})
    if path=='/api/missions/retry':
     mid=int(body.get('id',0))
