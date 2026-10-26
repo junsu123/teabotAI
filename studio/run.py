@@ -29,6 +29,7 @@ import browser_listing
 import proxy_store
 import ceo_engine
 import agent_forum
+import model_router
 import main as legacy_ai
 import uuid
 import time
@@ -169,6 +170,8 @@ def overview():
  return {'agents':AGENTS,'accounts':shops,'jobs':jobs,'missions':ms,
     'learnings':list_learnings(), 'products':list_products(), 'proxies':proxy_store.all_proxies(), 'training':training_summary(),
     'ollama':ollama_health(),
+    'model_routing':model_router.configuration_status(),
+    'openai_usage':model_router.usage_month(DATA/'openai_usage.sqlite3'),
     'stats':{'agents':len(AGENTS),'shops':len(shops),'jobs_open':sum(x['status'] not in ('posted','rejected','failed') for x in jobs),
              'missions_open':sum(x['status']!='done' for x in ms),'lessons':len(list_learnings())},
     'integration':{'ollama_url':'http://localhost:11434','telegram':'Cần cấu hình token ở máy',
@@ -406,8 +409,11 @@ class Handler(BaseHTTPRequestHandler):
    return error_reply(self,500,f'Lỗi nội bộ: {type(e).__name__}')
 
 def ceo_chat(agent,prompt):
- # Bounded CPU work: show a useful error instead of waiting silently for 3+ minutes per agent.
- return legacy_ai.chat(agent,prompt,timeout_seconds=100,max_output_tokens=520)
+ # Models are configured per agent. Paid OpenAI calls are opt-in ONLY.
+ # All providers receive mandatory Vietnamese-language instructions.
+ def local_call(role, message):
+  return legacy_ai.chat(role,message,timeout_seconds=100,max_output_tokens=520)
+ return model_router.chat(agent,prompt,local_call,DATA/'openai_usage.sqlite3')
 
 def main():
  import argparse
