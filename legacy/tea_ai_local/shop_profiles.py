@@ -280,7 +280,9 @@ def check_account_once(account_id: str, proxy_env: dict | None = None) -> dict:
 def interactive_open(account_id: str) -> None:
     """Manual login; automatically inspect status, without exporting cookies."""
     from playwright.sync_api import sync_playwright
-    from session_monitor import inspect_and_save, write_status, verify_in_separate_tab, PROBE_REQUEST
+    from session_monitor import (inspect_and_save, write_status, verify_in_separate_tab,
+                                 read_status, probe_url, PROBE_REQUEST)
+    import time
     account = get_account(account_id)
     folder = PROFILES / account_id
     with sync_playwright() as playwright:
@@ -289,11 +291,11 @@ def interactive_open(account_id: str) -> None:
             page.goto(account['start_url'], wait_until='domcontentloaded', timeout=60000)
             print(f'Đã mở Chrome Profile {account_id}. Đăng nhập thủ công trong cửa sổ Chrome.')
             print('Phần mềm kiểm tra trạng thái mỗi 5 giây. Đóng cửa sổ Chrome để kết thúc.')
+            last_probe = 0.0
             while True:
                 try:
                     alive = [p for p in context.pages if not p.is_closed()]
                 except Exception:
-                    # Browser was closed by the operator.
                     break
                 if not alive:
                     break
@@ -302,15 +304,21 @@ def interactive_open(account_id: str) -> None:
                     if requested.exists():
                         requested.unlink(missing_ok=True)
                         verify_in_separate_tab(context, account, folder)
+                        last_probe = time.monotonic()
                     else:
-                        inspect_and_save(context, account, folder)
+                        status = inspect_and_save(context, account, folder)
+                        target_known = probe_url(folder, account) != account["start_url"]
+                        needs_probe = (status["status"] == "checking" or
+                                       (target_known and time.monotonic() - last_probe >= 60))
+                        if needs_probe and target_known:
+                            verify_in_separate_tab(context, account, folder)
+                            last_probe = time.monotonic()
                 except Exception as exc:
                     write_status(folder, 'error',
-                                 message=f'Không thể đọc trạng thái: {type(exc).__name__}; đang thử lại.')
+                                 message=f'Không thể kiểm tra: {type(exc).__name__}; đang thử lại.')
                 try:
                     alive[0].wait_for_timeout(5000)
                 except Exception:
-                    import time
                     time.sleep(1)
 
 def main(argv=None):
