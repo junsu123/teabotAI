@@ -47,11 +47,27 @@ def process(db_path,task,chat,record_step,update_report,finish):
             "tránh sao chép; từ khóa khách hàng mục tiêu. Bằng tiếng Việt.\n"+context)
         pv.stage(db_path,mid,"research",research,"research_complete")
 
-        retail=ask("analyst","Phòng Nghiên cứu Giá: đánh giá bán lẻ và nguồn chứng cứ.",
-            "Phòng Nghiên cứu Giá bán lẻ sản phẩm. "+cc.price_rules()+
-            "\nDỮ LIỆU GIÁ/ĐỐI THỦ DO CHỦ CUNG CẤP (chưa tự kiểm chứng):\n"+
-            (evidence if evidence else "Không có dữ liệu giá đầu vào.")+
-            "\n"+context+"\nBẢN NGHIÊN CỨU TIKTOK:\n"+research[:4500])
+        if evidence.strip():
+            retail=ask("analyst","Phòng Nghiên cứu Giá: đánh giá bán lẻ và nguồn chứng cứ.",
+                "Phòng Nghiên cứu Giá bán lẻ sản phẩm. "+cc.price_rules()+
+                "\nDỮ LIỆU GIÁ/ĐỐI THỦ DO CHỦ CUNG CẤP (chưa tự kiểm chứng):\n"+
+                evidence+"\n"+context+"\nBẢN NGHIÊN CỨU TIKTOK:\n"+research[:4500])
+            retail=("DỮ LIỆU GIÁ DO CHỦ CUNG CẤP, CHƯA XÁC THỰC TRỰC TUYẾN.\n"+retail)
+        else:
+            # No search connector is installed in the standalone Windows app.
+            # Do not ask a model to invent a retail-market survey.
+            retail=("CHƯA XÁC MINH GIÁ BÁN LẺ. Không có dữ liệu giá thị trường "
+                    "và nguồn tham khảo trong hồ sơ.\n"
+                    "Đề xuất: thu thập 5–10 sản phẩm cùng phân khúc trên Shopee/TikTok Shop; "
+                    "ghi URL, quy cách, giá niêm yết, ưu đãi, ngày kiểm tra. "
+                    "Loại bỏ giá không cùng quy cách.\n"
+                    "Công thức lập giá bán: chi phí hàng hóa + phí nền tảng + chi phí đóng gói "
+                    "+ hỗ trợ vận chuyển + quảng cáo + dự phòng hoàn hàng + lợi nhuận mục tiêu. "
+                    "Chưa có dữ liệu đầu vào nên không đưa con số giá khuyến nghị.")
+            agent_forum.record(db_path,mid,"ceo","analyst","assignment",
+                 "Rà soát dữ liệu bán lẻ: thiếu nguồn đối thủ, không được phát minh giá.")
+            record_step(db_path,mid,"analyst","done",result=retail)
+            agent_forum.record(db_path,mid,"analyst","ceo","proposal",retail)
         cc.update(db_path,mid,"retail_price",retail)
 
         seo_raw=ask("strategy","Phòng SEO: tạo tiêu đề và mô tả cho Shopee / TikTok Shop.",
