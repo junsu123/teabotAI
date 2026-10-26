@@ -200,12 +200,21 @@ def inspect_context(context, account, page=None):
         return "unknown", 0, "Không đọc được giao diện quản trị, có thể đang chuyển trang hoặc tải lỗi."
 
 
-def inspect_and_save(context, account, profile_dir, page=None):
+def inspect_and_save(context, account, profile_dir, page=None, fresh_navigation=False):
     page = page or _active_page(context, account["platform"])
     status, _, msg = inspect_context(context, account, page)
-    write_status(profile_dir, status, message=msg)
     if status == "logged_in" and page is not None:
+        # Learn a safe protected link, but a visible old tab alone does not
+        # prove that the server would still accept the session right now.
         save_probe(profile_dir, account["platform"], page.url)
+        if not fresh_navigation:
+            previous = read_status(profile_dir)
+            if previous["status"] == "logged_in":
+                return previous
+            write_status(profile_dir, "checking",
+                         message="Đã thấy menu quản trị; đang xác minh lại bằng lần tải trang mới.")
+            return read_status(profile_dir)
+    write_status(profile_dir, status, message=msg)
     return read_status(profile_dir)
 
 
@@ -219,7 +228,8 @@ def verify_in_separate_tab(context, account, profile_dir):
             write_status(profile_dir, "unknown", message="Trang quản trị báo lỗi tải trang.")
             return read_status(profile_dir)
         page.wait_for_timeout(1600)
-        return inspect_and_save(context, account, profile_dir, page=page)
+        return inspect_and_save(context, account, profile_dir, page=page,
+                                fresh_navigation=True)
     except Exception:
         write_status(profile_dir, "error",
                      message="Không tải được trang kiểm tra; kiểm tra kết nối mạng, proxy và thử lại.")
