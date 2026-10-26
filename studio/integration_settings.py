@@ -1,8 +1,8 @@
 """Local integration settings owned by Mars Studio.
 
-Sensitive OpenAI keys and Telegram tokens live in the OS credential store (keyring).
-Only non-sensitive settings live in a private JSON file under studio/data.
-No raw secrets are returned by the web interface or logged.
+API keys and Telegram tokens are encrypted in a private local SQLite database.
+Only a master encryption key lives in the OS credential store (keyring).
+Non-secret settings stay in JSON. Secrets are never returned in status views.
 """
 from __future__ import annotations
 import json
@@ -10,6 +10,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
+import secret_vault
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from urllib.parse import quote
@@ -50,11 +51,22 @@ def keyring_backend():
         raise RuntimeError("Cần cài keyring bằng setup_windows.bat trước.") from ex
 
 
+_SECRET_NAMES=(OPENAI_SECRET,CLAUDE_SECRET,GEMINI_SECRET,GROQ_SECRET,TELEGRAM_SECRET)
+_REVEAL_PROVIDERS={"openai":OPENAI_SECRET,"claude":CLAUDE_SECRET,
+                   "gemini":GEMINI_SECRET,"groq":GROQ_SECRET,
+                   "telegram":TELEGRAM_SECRET}
+
+
 def _get(name):
+    if name not in _SECRET_NAMES:
+        raise ValueError("Loại khóa không hợp lệ")
     try:
-        return keyring_backend().get_password(SERVICE,name) or ""
-    except Exception:
-        # Status views must never crash the dashboard just because keyring is unavailable.
+        return secret_vault.migrate_one(SETTINGS,keyring_backend(),SERVICE,name) or ""
+    except RuntimeError as error:
+        # No credential backend available: dashboard status should still work,
+        # but decryption and reveal must fail clearly when requested.
+        if "không giải mã" in str(error):
+            raise
         return ""
 
 
@@ -63,24 +75,35 @@ def has_secret(name):
 
 
 def set_secret(name,value):
-    if name not in (OPENAI_SECRET,CLAUDE_SECRET,GEMINI_SECRET,GROQ_SECRET,TELEGRAM_SECRET):
+    if name not in _SECRET_NAMES:
         raise ValueError("Loại khóa không hợp lệ")
     if not isinstance(value,str):
         raise ValueError("Khóa phải là văn bản")
     val=value.strip()
-    if not val or len(val)>4096 or any(x in val for x in "\r\n\x00 "):
+    if not val or len(val)>4096 or any(x in val for x in "\\r\\n\\x00 "):
         raise ValueError("Khóa không hợp lệ (không được có khoảng trắng hoặc xuống dòng)")
-    keyring_backend().set_password(SERVICE,name,val)
+    secret_vault.save_secret(SETTINGS,keyring_backend(),SERVICE,name,val)
+    # A newly replaced legacy key must not come back after SQLite deletion.
+    try:keyring_backend().delete_password(SERVICE,name)
+    except Exception:pass
 
 
 def delete_secret(name):
-    if name not in (OPENAI_SECRET,CLAUDE_SECRET,GEMINI_SECRET,GROQ_SECRET,TELEGRAM_SECRET):
+    if name not in _SECRET_NAMES:
         raise ValueError("Loại khóa không hợp lệ")
-    kr=keyring_backend()
-    try: kr.delete_password(SERVICE,name)
-    except Exception:
-        if kr.get_password(SERVICE,name):
-            raise
+    secret_vault.delete_secret(SETTINGS,name)
+    try:keyring_backend().delete_password(SERVICE,name)
+    except Exception:pass
+
+
+def reveal_secret(provider):
+    """Explicit owner reveal. Never call from status/overview or logging."""
+    if not isinstance(provider,str) or provider not in _REVEAL_PROVIDERS:
+        raise ValueError("Chỉ được xem khóa tích hợp được hỗ trợ")
+    name=_REVEAL_PROVIDERS[provider]
+    result=secret_vault.migrate_one(SETTINGS,keyring_backend(),SERVICE,name)
+    if not result:raise ValueError("Chưa lưu API key hoặc token này trong database")
+    return result
 
 
 def read():
