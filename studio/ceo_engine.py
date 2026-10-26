@@ -128,6 +128,12 @@ def work_once(db_path, chat, get_products):
     if task is None:return False
     mid=task["id"]
     try:
+        import product_video_workflow as pv
+        brief=pv.get_brief(db_path,mid)
+        if brief is not None:
+            import video_ceo_pipeline
+            video_ceo_pipeline.process(db_path,task,chat,step,set_report,finish)
+            return True
         facts=summarize_context(get_products())
         req=f"Tên nhiệm vụ: {task['title']}\nYêu cầu: {task['detail']}"
         plan_prompt=(
@@ -206,6 +212,11 @@ def work_once(db_path, chat, get_products):
         if "11434" in msg or "Ollama" in msg or "Connection refused" in msg:
             msg="Không kết nối được Ollama. Hãy mở Ollama và tải model trước khi bấm Thử lại. Chi tiết: "+msg
         agent_forum.record(db_path,mid,"system","ceo","error",msg[:1400])
+        try:
+            import product_video_workflow as pv
+            if pv.get_brief(db_path,mid):
+                pv.state(db_path,mid,"blocked")
+        except Exception:pass
         set_report(db_path,mid,error=msg[:2500])
         finish(db_path,mid,"blocked")
     return True
