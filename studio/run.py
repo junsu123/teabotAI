@@ -265,7 +265,7 @@ class Handler(BaseHTTPRequestHandler):
      session_monitor.write_status(folder,'checking',0,'Đang mở Chrome để kiểm tra trạng thái...')
      def check_worker():
       try:
-       shop_profiles.check_account_once(aid)
+       shop_profiles.check_account_once(aid,proxy_env=proxy_store.account_env(aid))
       except Exception as exc:
        session_monitor.write_status(folder,'error',0,
                      f'Không thể kiểm tra profile: {type(exc).__name__}')
