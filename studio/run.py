@@ -30,6 +30,7 @@ import proxy_store
 import ceo_engine
 import agent_forum
 import product_video_workflow
+import commerce_content
 import model_router
 import claude_provider
 import integration_settings
@@ -177,6 +178,8 @@ def overview():
  briefs={k:v for k,v in briefs.items() if v}
  return {'agents':AGENTS,'accounts':shops,'jobs':jobs,'missions':ms,
     'video_briefs':briefs,'video_productions':product_video_workflow.list_production(DB),
+    'commerce_outputs':commerce_content.list_outputs(DB),
+    'veo_template':commerce_content.template(DB),
     'learnings':list_learnings(), 'products':list_products(), 'proxies':proxy_store.all_proxies(), 'training':training_summary(),
     'ollama':ollama_health(),
     'model_routing':model_router.configuration_status(integration_settings.openai_env()),
@@ -457,6 +460,9 @@ class Handler(BaseHTTPRequestHandler):
     if not (TRAIN_DIR/(sid+'.status.json')).exists():raise ValueError('Không tìm thấy phiên học')
     (TRAIN_DIR/(sid+'.stop')).touch()
     return json_reply(self,{'ok':True,'message':'Đã yêu cầu lưu và dừng phiên học'})
+   if path=='/api/content/veo-template':
+    result=commerce_content.save_template(DB,body.get('template',''))
+    return json_reply(self,result)
    if path=='/api/missions':
     agent=sanitize(body.get('agent_id','ceo'),40)
     if agent!='ceo':raise ValueError('Chủ doanh nghiệp chỉ giao nhiệm vụ cho AI CEO')
