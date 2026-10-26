@@ -63,6 +63,12 @@ def model_for(agent, env=None):
 def provider_for(agent, env=None):
     if agent not in VALID_AGENTS:
         raise ValueError("Agent không hợp lệ")
+    # GUI provider selection overrides old OPENAI_AGENT environment conventions.
+    explicit=(env.get("TEA_AGENT_PROVIDER_"+agent.upper()) or "").strip().lower()
+    if explicit:
+        if explicit not in {"claude","openai","ollama"}:
+            raise ValueError("Nhà cung cấp AI không hợp lệ cho "+agent)
+        return explicit
     return "openai" if agent in enabled_agents(env) else "ollama"
 
 def _usage_db(db_file):
@@ -164,16 +170,38 @@ def _openai_chat(agent, prompt, db_file, env=None, transport=None):
 
 def chat(agent, prompt, local_chat, db_file, env=None, transport=None):
     env = os.environ if env is None else env
-    if provider_for(agent,env) == "ollama":
+    provider=provider_for(agent,env)
+    if provider=="ollama":
         return local_chat(agent, VIETNAMESE_RULES+"\n\n"+prompt)
+    if provider=="claude":
+        import claude_provider
+        model=env.get("TEA_CLAUDE_MODEL_"+agent.upper(),claude_provider.DEFAULT_MODELS[agent])
+        return claude_provider.call(agent,prompt,
+            Path(db_file).with_name("claude_usage.sqlite3"),
+            key=env.get("ANTHROPIC_API_KEY",""),model=model,
+            limit_usd=env.get("TEA_CLAUDE_MONTHLY_LIMIT_USD","12"),transport=transport)
     return _openai_chat(agent,prompt,db_file,env=env,transport=transport)
 
 def configuration_status(env=None):
     env = os.environ if env is None else env
-    active=enabled_agents(env)
-    return {"language":"vi","openai_agents": sorted(active),
-            "routes":{agent:({"provider":"openai","model":model_for(agent,env)}
-                              if agent in active else {"provider":"ollama"})
-                       for agent in sorted(VALID_AGENTS)},
-            "openai_key_configured": bool(env.get("OPENAI_API_KEY")),
-            "monthly_limit_usd": _maximum_budget(env)}
+    import claude_provider
+    routes={}
+    for agent in sorted(VALID_AGENTS):
+        provider=provider_for(agent,env)
+        if provider=="claude":
+            routes[agent]={"provider":"claude","model":env.get(
+                "TEA_CLAUDE_MODEL_"+agent.upper(),claude_provider.DEFAULT_MODELS[agent])}
+        elif provider=="openai":
+            routes[agent]={"provider":"openai","model":model_for(agent,env)}
+        else:
+            routes[agent]={"provider":"ollama"}
+    return {
+        "language":"vi",
+        "openai_agents":[a for a,p in routes.items() if p["provider"]=="openai"],
+        "claude_agents":[a for a,p in routes.items() if p["provider"]=="claude"],
+        "routes":routes,
+        "openai_key_configured":bool(env.get("OPENAI_API_KEY")),
+        "claude_key_configured":bool(env.get("ANTHROPIC_API_KEY")),
+        "monthly_limit_usd":_maximum_budget(env),
+        "claude_monthly_limit_usd":float(env.get("TEA_CLAUDE_MONTHLY_LIMIT_USD","12")),
+    }
