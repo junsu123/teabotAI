@@ -208,6 +208,33 @@ class FreeFirstTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,"cấp dự án"):
             settings.test_groq(http=blocked,key_override="gsk-test-placeholder")
 
+    def test_groq_403_returns_safe_provider_error_code(self):
+        secret="DO_NOT_EXPOSE_KEY"
+        raw=json.dumps({"error":{"code":"access_denied","type":"permissions_error",
+           "message":"This message contains "+secret}}).encode()
+        def reject(req):
+            raise HTTPError(req.full_url,403,"Forbidden",hdrs=None,fp=BytesIO(raw))
+        with self.assertRaisesRegex(RuntimeError,"access_denied") as result:
+            settings.test_groq(http=reject,key_override="gsk-test-placeholder")
+        self.assertNotIn(secret,str(result.exception))
+        self.assertIn("đọc danh sách model",str(result.exception))
+
+    def test_groq_403_unsafe_error_code_is_hidden(self):
+        code="gsk-not-a-real-key-THIS_MUST_NOT_APPEAR_TOKEN_VALUE_TOO_LONG_TO_BE_SAFE_ECHO"
+        raw=json.dumps({"error":{"code":code,"message":"Denied"}}).encode()
+        def reject(req):
+            raise HTTPError(req.full_url,403,"Forbidden",hdrs=None,fp=BytesIO(raw))
+        with self.assertRaises(RuntimeError) as result:
+            settings.test_groq(http=reject,key_override="gsk-test-placeholder")
+        self.assertNotIn(code,str(result.exception))
+
+    def test_groq_html_access_denial_mentions_network_layer(self):
+        def reject(req):
+            raise HTTPError(req.full_url,403,"Forbidden",hdrs=None,
+                            fp=BytesIO(b"<!doctype html><html><body>Forbidden</body></html>"))
+        with self.assertRaisesRegex(RuntimeError,"lớp bảo vệ mạng"):
+            settings.test_groq(http=reject,key_override="gsk-test-placeholder")
+
     def test_groq_403_unknown_does_not_claim_model_problem(self):
         def blocked(req):
             raise HTTPError(req.full_url,403,"Forbidden",hdrs=None,fp=BytesIO(b""))
