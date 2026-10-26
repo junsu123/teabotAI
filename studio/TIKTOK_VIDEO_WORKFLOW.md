@@ -5,7 +5,7 @@ Bản cập nhật bổ sung một dây chuyền nội bộ do **AI CEO** điề
 ## Quy trình
 
 1. Chủ doanh nghiệp giao brief sản phẩm cho AI CEO.
-2. Phòng Nghiên cứu TikTok (AI Research): phân tích URL như tham chiếu và ghi chú/transcript thực tế do người dùng cung cấp, đề xuất hook và góc triển khai nguyên bản. Không khẳng định đã xem video, lượt xem hoặc phản hồi khi chưa truy cập được.
+2. Phòng Nghiên cứu TikTok (AI Research): tìm tiêu đề/tác giả công khai nếu TikTok cho phép qua oEmbed và kết hợp ghi chú/transcript thực tế do chủ cung cấp; đề xuất hook và góc triển khai nguyên bản. Không khẳng định đã xem hình/âm thanh video, lượt xem hoặc phản hồi khi chưa truy cập được.
 3. Phòng Biên kịch (AI Creative): đề xuất hai kịch bản tiếng Việt, mỗi kịch bản 5 cảnh khoảng 8 giây.
 4. Phòng Kiểm duyệt (AI Compliance): rà soát nội dung công dụng, giấy tờ, chứng nhận và yêu cầu chỉnh sửa nếu thiếu bằng chứng; chỉ đồng ý khi đạt yêu cầu.
 5. Phòng Video AI: nhận kịch bản đã duyệt và tạo gói storyboard, prompt video, voiceover, phụ đề và chuyển cảnh; chưa render MP4.
@@ -43,7 +43,7 @@ Tệp được lưu trên ổ cứng máy chạy phần mềm dưới studio/dat
 
 ## Hạn chế và an toàn
 
-Chỉ link TikTok không đủ để xem video; phần mềm hiện chưa có quyền API TikTok hoặc module tải và phân tích video. Nghiên cứu sẽ dựa trên ghi chú/transcript do bạn cung cấp; không bịa nội dung, doanh số hay view. Không sao chép video đối thủ.
+Đối với link TikTok chủ cung cấp, phần mềm có thể thử dịch vụ oEmbed công khai của TikTok để lấy tiêu đề/tác giả (có thể bị từ chối hoặc ngừng hỗ trợ); đây chỉ là metadata, KHÔNG xem/đọc được khung hình, âm thanh, bình luận hoặc lượt view thực tế. Phần mềm không có quyền Research API hoặc module phân tích trực tiếp video. Nghiên cứu nội dung vẫn cần ghi chú/transcript do người thực sự xem cung cấp. Không bịa nội dung/doanh số hay sao chép video đối thủ.
 
 Nếu sử dụng Gemini, Groq, Claude hoặc OpenAI, nội dung brief, ghi chú, URL, thành phần và văn bản trích từ PDF được gửi tới nhà cung cấp AI để xử lý. Tệp ảnh và PDF gốc giữ cục bộ, chưa trực tiếp gửi cho mô hình đa phương thức. Không đưa dữ liệu khách hàng nhạy cảm, OTP, cookies hoặc mật khẩu vào hồ sơ.
 
