@@ -41,6 +41,7 @@ class ProductVideoWorkflowTests(unittest.TestCase):
             "ingredients":"Đinh lăng, cỏ ngọt",
             "tiktok_urls":"https://www.tiktok.com/@example/video/76543210",
             "research_notes":"Video mở đầu bằng một câu hỏi và giới thiệu cách pha trà.",
+            "price_evidence":"URL đối thủ https://example.com/tea 39.000đ ngày 2026-10-20",
             "image3d":{"name":"hop-tra.png","type":"image/png",
                         "base64":base64.b64encode(image).decode("ascii")},
         }
@@ -116,6 +117,30 @@ class ProductVideoWorkflowTests(unittest.TestCase):
         self.assertIn("CHƯA",calls[0][1])
         with sqlite3.connect(self.db) as con:
             self.assertEqual(con.execute("SELECT status FROM missions WHERE id=?",(mid,)).fetchone()[0],"done")
+
+    def test_price_without_evidence_is_not_invented(self):
+        import commerce_content as cc
+        details=self.payload()
+        details["price_evidence"]=""
+        mid=pv.create_mission(self.db,self.root,"Tạo nội dung trà có giá chưa xác minh","",details)
+        called=[]
+        def chat(agent,prompt):
+            called.append(agent)
+            if agent=="research":return "Ghi chú tham khảo"
+            if agent=="strategy":return json.dumps({"titles":[
+                "Trà thảo mộc đinh lăng cỏ ngọt túi lọc",
+                "Trà túi lọc đinh lăng và cỏ ngọt tiện pha"],
+                "description":"Sản phẩm trà thảo mộc theo thông tin được cung cấp với "
+                "hai thành phần đinh lăng và cỏ ngọt. Xem nhãn sản phẩm để biết thêm."},
+                ensure_ascii=False)
+            if agent=="compliance":
+                return json.dumps({"status":"needs_review","reason":"Cần rà soát hồ sơ"})
+            return "Kịch bản quảng bá 40 giây"
+        ceo_engine.work_once(self.db,chat,lambda:{})
+        self.assertNotIn("analyst",called)
+        report=cc.get(self.db,mid)["retail_price"]
+        self.assertIn("CHƯA XÁC MINH GIÁ BÁN LẺ",report)
+        self.assertNotIn("39.000đ",report)
 
     def test_unverified_claims_cannot_autohandoff(self):
         mid=self.new_mission()
