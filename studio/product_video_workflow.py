@@ -8,6 +8,7 @@ import os
 import re
 import sqlite3
 import uuid
+import commerce_content
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -34,7 +35,8 @@ def setup(path):
             mission_id INTEGER PRIMARY KEY, product_name TEXT NOT NULL,
             ingredients TEXT NOT NULL, tiktok_urls TEXT NOT NULL DEFAULT '[]',
             research_notes TEXT DEFAULT '', document_text TEXT DEFAULT '',
-            document_status TEXT DEFAULT 'not_provided', created_at TEXT NOT NULL);
+            document_status TEXT DEFAULT 'not_provided',created_at TEXT NOT NULL,
+            veo_template TEXT DEFAULT '');
         CREATE TABLE IF NOT EXISTS mission_assets(
             id INTEGER PRIMARY KEY, mission_id INTEGER NOT NULL, kind TEXT NOT NULL,
             filename TEXT NOT NULL, stored_path TEXT NOT NULL, mime TEXT NOT NULL,
@@ -45,6 +47,10 @@ def setup(path):
             script TEXT DEFAULT '', compliance TEXT DEFAULT '',
             storyboard TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'research_pending',
             updated_at TEXT NOT NULL);""")
+        existing={r["name"] for r in c.execute("PRAGMA table_info(mission_product_briefs)")}
+        if "veo_template" not in existing:
+            c.execute("ALTER TABLE mission_product_briefs ADD COLUMN veo_template TEXT NOT NULL DEFAULT ''")
+    commerce_content.setup(path)
 
 
 def field(value,title,limit,required=False):
@@ -118,13 +124,15 @@ def prepare(payload):
     name=field(payload.get("product_name",""),"Tên sản phẩm",180,True)
     ingredients=field(payload.get("ingredients",""),"Thành phần",2500,True)
     notes=field(payload.get("research_notes",""),"Ghi chú video",4200)
+    price_notes=field(payload.get("price_evidence",""),"Dữ liệu giá tham khảo",4500)
     urls=references(payload.get("tiktok_urls",[]))
     image=decode(payload.get("image3d"),"image3d")
     paper=decode(payload.get("disclosure_file"),"disclosure")
     if sum(len(x["data"]) for x in (image,paper) if x)>20*1024*1024:
         raise ValueError("Tổng tệp tối đa 20 MB")
     text,status=extract_document(paper)
-    return {"name":name,"ingredients":ingredients,"notes":notes,"urls":urls,
+    return {"name":name,"ingredients":ingredients,"notes":notes,
+            "price_evidence":price_notes,"urls":urls,
             "image":image,"paper":paper,"document_text":text,"document_status":status}
 
 
@@ -132,6 +140,10 @@ def create_mission(db_path,data_dir,title,detail,payload):
     brief=prepare(payload)
     if not 3<=len(title)<=150 or len(detail)>2000:
         raise ValueError("Tiêu đề/yêu cầu nhiệm vụ không hợp lệ")
+    base=payload.get("veo_prompt_template")
+    if base is None:base=commerce_content.template(db_path)
+    if not isinstance(base,str) or len(base)>16000:
+        raise ValueError("Mẫu Google Veo 3 vượt giới hạn 16.000 ký tự")
     directory=Path(data_dir)/"product_missions"/uuid.uuid4().hex
     stored=[]
     try:
@@ -151,10 +163,10 @@ def create_mission(db_path,data_dir,title,detail,payload):
                VALUES('ceo',?,?,'pending',?,?)""",(title,detail,now(),now()))
             mid=cur.lastrowid
             c.execute("""INSERT INTO mission_product_briefs
-               (mission_id,product_name,ingredients,tiktok_urls,research_notes,document_text,document_status,created_at)
-               VALUES(?,?,?,?,?,?,?,?)""",(mid,brief["name"],brief["ingredients"],
+               (mission_id,product_name,ingredients,tiktok_urls,research_notes,document_text,document_status,created_at,veo_template)
+               VALUES(?,?,?,?,?,?,?,?,?)""",(mid,brief["name"],brief["ingredients"],
                 json.dumps(brief["urls"],ensure_ascii=False),brief["notes"],
-                brief["document_text"],brief["document_status"],now()))
+                brief["document_text"],brief["document_status"],now(),base.strip()))
             for kind,f,path in stored:
                 c.execute("""INSERT INTO mission_assets
                   (mission_id,kind,filename,stored_path,mime,size_bytes,sha256)
@@ -162,6 +174,8 @@ def create_mission(db_path,data_dir,title,detail,payload):
                   f["name"],str(path),f["mime"],len(f["data"]),
                   hashlib.sha256(f["data"]).hexdigest()))
             c.execute("INSERT INTO video_production(mission_id,status,updated_at) VALUES(?,'research_pending',?)",(mid,now()))
+            c.execute("""INSERT INTO commerce_outputs(mission_id,price_evidence,status,updated_at)
+                         VALUES(?,?,'pending',?)""",(mid,brief["price_evidence"],now()))
         return mid
     except Exception:
         for _,_,p in stored:
@@ -180,7 +194,9 @@ def get_brief(db_path,mid,include_doc=True):
         info["tiktok_urls"]=json.loads(info["tiktok_urls"])
         info["assets"]=[dict(r) for r in c.execute(
             "SELECT id,kind,filename,mime,size_bytes FROM mission_assets WHERE mission_id=? ORDER BY id",(mid,))]
-        if not include_doc:info.pop("document_text",None)
+        if not include_doc:
+            info.pop("document_text",None)
+            info.pop("veo_template",None)
         return info
 
 
