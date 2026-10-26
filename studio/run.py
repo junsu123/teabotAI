@@ -256,8 +256,9 @@ class Handler(BaseHTTPRequestHandler):
     shop_profiles.get_account(aid)
     folder=shop_profiles.PROFILES/aid
     if (folder/'.tea_ai_in_use').exists():
-     return json_reply(self,{'ok':True,'mode':'live_monitor','session':session_monitor.read_status(folder),
-                  'message':'Chrome profile đang mở; trạng thái được kiểm tra tự động định kỳ.'})
+     (folder/session_monitor.PROBE_REQUEST).touch()
+     return json_reply(self,{'ok':True,'mode':'checking',
+                  'message':'Đã yêu cầu kiểm tra lại trang quản trị trong Chrome đang mở.'})
     with SESSION_CHECKS_LOCK:
      task=SESSION_CHECKS.get(aid)
      if task is not None and task.is_alive():
