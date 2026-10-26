@@ -111,6 +111,33 @@ class FreeFirstTests(unittest.TestCase):
                 self.db,env=settings.openai_env({}),transport=respond)
         self.assertEqual(len(seen),1)
 
+    def test_unsaved_groq_key_and_permissions(self):
+        # The test button must work before the Save button.
+        def read_models(request):
+            self.assertEqual(request.get_header("Authorization"),"Bearer gsk-only-temporary")
+            return {"data":[{"id":"openai/gpt-oss-120b"}]}
+        test=settings.test_groq(http=read_models,key_override="gsk-only-temporary")
+        self.assertTrue(test["ok"])
+        self.assertIn("openai/gpt-oss-120b",test["supported_models"])
+        self.assertFalse(settings.status()["groq_key_configured"])
+
+    def test_wrong_grok_key_explained(self):
+        with self.assertRaisesRegex(ValueError,"Grok"):
+            settings.test_groq(key_override="xai-this-is-not-a-groq-key")
+
+    def test_groq_auth_error_explained(self):
+        def reject(request):
+            raise HTTPError(request.full_url,401,"Unauthorized",hdrs=None,fp=None)
+        with self.assertRaisesRegex(RuntimeError,"HTTP 401"):
+            settings.test_groq(http=reject,key_override="gsk-sample")
+
+    def test_groq_models_missing_gives_visible_warning(self):
+        result=settings.test_groq(http=lambda req:{"data":[{"id":"custom/model"}]},
+                                  key_override="gsk-sample")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["supported_models"],[])
+        self.assertIn("Không có model",result["warning"])
+
     def test_direct_provider_and_free_key_tests(self):
         cfg=self.setup_free()
         settings.save_ai_providers({"agent_providers":{"ceo":"groq"}})
