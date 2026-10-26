@@ -185,7 +185,15 @@ def _call_provider(provider,agent,prompt,local_chat,db_file,env,transport=None):
         key=env.get("GEMINI_API_KEY","") if provider=="gemini" else env.get("GROQ_API_KEY","")
         if provider=="gemini":
             model=env.get("TEA_GEMINI_MODEL_"+agent.upper(),cloud.GEMINI_DEFAULT[agent])
-            return cloud.gemini_chat(agent,prompt,key=key,model=model,transport=transport)
+            try:
+                return cloud.gemini_chat(agent,prompt,key=key,model=model,transport=transport)
+            except Exception as error:
+                if isinstance(error,cloud.TemporaryProviderError):
+                    raise cloud.TemporaryProviderError(
+                        "Gemini/"+model+" · agent "+agent+": "+str(error)) from None
+                if isinstance(error,(RuntimeError,ValueError)):
+                    raise RuntimeError("Gemini/"+model+" · agent "+agent+": "+str(error)) from None
+                raise
         model=env.get("TEA_GROQ_MODEL_"+agent.upper(),cloud.GROQ_DEFAULT[agent])
         try:
             return cloud.groq_chat(agent,prompt,key=key,model=model,transport=transport)
