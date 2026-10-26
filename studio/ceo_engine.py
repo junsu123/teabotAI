@@ -24,6 +24,8 @@ def connect(db_path):
     return c
 
 def setup(db_path):
+    import product_video_workflow as pv
+    pv.setup(db_path)  # Ensure old databases and isolated unit tests gain new tables.
     with connect(db_path) as c:
         c.executescript("""
         CREATE TABLE IF NOT EXISTS ceo_delegations(
