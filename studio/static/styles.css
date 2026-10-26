@@ -73,3 +73,24 @@
 .integration-savebar button{white-space:nowrap}
 @media(max-width:1150px){.integration-key-layout,.integration-agent-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.integration-agent-fields,.integration-paid-grid{grid-template-columns:1fr}.integration-hero{padding:16px}.integration-hero h2{font-size:20px}.integration-savebar{position:static;flex-wrap:wrap}.integration-savebar button{width:100%}.integration-tabs button{font-size:12px;padding:10px 8px}.integration-expander summary small{display:none}.integration-key-top{flex-wrap:wrap}.integration-key-status{margin-left:0}}
+
+/* Product-video CEO brief and research/production room */
+.video-form-fields{margin:16px 0;padding:15px;border:1px solid #32566c;border-radius:13px;background:#10273b}
+.video-form-fields[hidden]{display:none}
+.video-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.video-form-fields input[type=file]{width:100%;max-width:100%;font-size:12px;background:#102b3d;padding:10px;border:1px dashed #4b8290;border-radius:8px}
+.video-form-fields small{display:block;font-size:11px;color:#a4c3cb;line-height:1.5;margin-top:6px}
+.video-flow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:14px 0 19px;padding:14px;border-radius:12px;background:#10293b;border:1px solid #2e5368}
+.video-flow span{padding:8px 12px;border-radius:8px;background:#193c4b;color:#b9ede7;font-size:12px;font-weight:700}
+.video-flow b{color:#86d9c9}
+.video-work-card{margin-bottom:13px}
+.video-work-top{display:flex;align-items:start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.video-work-top h3{margin:5px 0 10px;font-size:18px}
+.video-stage{font-size:11px;font-weight:750;color:#9cebd7;background:#1b4549;border:1px solid #498f8a;border-radius:16px;padding:6px 10px}
+.video-asset-links{margin:9px 0 14px;font-size:12px;color:#8eaec0}
+.video-asset-links a{color:#85e4d8;text-decoration:underline;text-underline-offset:3px}
+.video-card-actions{display:flex;gap:8px;flex-wrap:wrap}
+.video-detail-section{border:1px solid #32536c;background:#10283d;border-radius:10px;margin:11px 0;padding:12px}
+.video-detail-section summary{cursor:pointer;font-weight:750;color:#d3f8ef}
+.video-detail-section pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;max-height:440px;overflow:auto;font-family:inherit;font-size:12px;color:#d0e5ec;line-height:1.6;margin:12px 0 0}
+@media(max-width:750px){.video-form-grid{grid-template-columns:1fr}.video-flow{gap:7px;padding:9px}.video-flow span{font-size:11px}.video-work-top h3{font-size:16px}}
