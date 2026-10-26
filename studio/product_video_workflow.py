@@ -213,6 +213,40 @@ def state(db_path,mid,status):
         c.execute("UPDATE video_production SET status=?,updated_at=? WHERE mission_id=?",(status,now(),mid))
 
 
+def public_tiktok_metadata(urls,fetch_json=None):
+    """Retrieve only public oEmbed metadata from the official TikTok host.
+
+    This is NOT a download, transcription, view-counter query or permission
+    to copy a creator's script. Failures are represented as unavailable.
+    """
+    from urllib.parse import urlencode
+    from urllib.request import Request, urlopen
+    result=[]
+    for url in urls[:MAX_REF]:
+        row={"url":url,"status":"unavailable","title":"","author":""}
+        try:
+            endpoint="https://www.tiktok.com/oembed?"+urlencode({"url":url})
+            if fetch_json is None:
+                request=Request(endpoint,headers={"User-Agent":"TeaMarsStudio/1.0",
+                                                  "Accept":"application/json"})
+                with urlopen(request,timeout=4) as response:
+                    metadata=json.loads(response.read(50000).decode("utf-8"))
+            else:
+                metadata=fetch_json(endpoint)
+            if isinstance(metadata,dict):
+                title=metadata.get("title","")
+                author=metadata.get("author_name","")
+                row.update(status="public_metadata_only",
+                    title=title[:300] if isinstance(title,str) else "",
+                    author=author[:120] if isinstance(author,str) else "")
+        except Exception:
+            # Unsupported/private/removed videos or network blocks must not
+            # stop the rest of the CEO production pipeline.
+            pass
+        result.append(row)
+    return result
+
+
 def summary(brief):
     description={"pdf_text_unverified":"PDF trích được chữ (CHƯA xác minh)",
       "image_needs_manual_review":"Ảnh giấy công bố chưa đọc nội dung",
