@@ -533,7 +533,8 @@ def ceo_chat(agent,prompt):
  # Models are configured per agent. Paid OpenAI calls are opt-in ONLY.
  # All providers receive mandatory Vietnamese-language instructions.
  def local_call(role, message):
-  return legacy_ai.chat(role,message,timeout_seconds=100,max_output_tokens=520)
+  budget=3500 if "VEO3_5_SCENES_STRUCTURED" in message else 520
+  return legacy_ai.chat(role,message,timeout_seconds=100,max_output_tokens=budget)
  return model_router.chat(agent,prompt,local_call,DATA/'openai_usage.sqlite3',
                           env=integration_settings.openai_env())
 
