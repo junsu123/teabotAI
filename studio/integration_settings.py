@@ -61,13 +61,12 @@ def _get(name):
     if name not in _SECRET_NAMES:
         raise ValueError("Loại khóa không hợp lệ")
     try:
-        return secret_vault.migrate_one(SETTINGS,keyring_backend(),SERVICE,name) or ""
-    except RuntimeError as error:
-        # No credential backend available: dashboard status should still work,
-        # but decryption and reveal must fail clearly when requested.
-        if "không giải mã" in str(error):
-            raise
+        backend=keyring_backend()
+    except RuntimeError:
+        # With no OS key store, ordinary status views remain readable.
         return ""
+    # Encrypted DB / missing master key failures are NOT hidden.
+    return secret_vault.migrate_one(SETTINGS,backend,SERVICE,name) or ""
 
 
 def has_secret(name):
