@@ -231,8 +231,8 @@ function telegramSettingsSection(){
  placeholder="${cfg.telegram_token_configured?'Đã lưu token – để trống để giữ nguyên':'Dán bot token ở đây'}">
  <small>${cfg.telegram_token_configured?'✓ Có token được lưu trong Windows':'Chưa lưu Telegram Bot Token'}</small></div>
  <div class="field"><label>Telegram User ID được phép (phân cách bằng dấu phẩy)</label>
- <input name="telegram_allowed_ids" value="${h((cfg.telegram_allowed_ids||[]).join(','))}" placeholder="123456789" required>
- <small>Chỉ những tài khoản có User ID trong danh sách mới được điều khiển Bot. Không dùng tên @username.</small></div>
+ <input name="telegram_allowed_ids" value="${h((cfg.telegram_allowed_ids||[]).join(','))}" placeholder="Ví dụ: 123456789 (để trống để lấy ID qua /myid)">
+ <small>Chưa biết User ID? Lưu token trước, bấm Bật Bot, mở Telegram nhắn <b>/myid</b> cho bot để lấy ID. Sau đó Tắt Bot → nhập ID → Lưu → Bật lại. Khi chưa có ID, các lệnh khác đều bị chặn.</small></div>
  <label class="checkbox-line"><input type="checkbox" name="telegram_autostart" ${cfg.telegram_autostart?'checked':''}>
  Tự chạy Telegram Bot khi khởi động Mars Studio</label>
  <div class="form-bottom" style="display:flex;gap:8px;flex-wrap:wrap">
