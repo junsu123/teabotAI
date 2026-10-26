@@ -123,6 +123,59 @@ def _request_json(request, transport=None, timeout=60):
         raise TemporaryProviderError(message) from None
 
 
+def _groq_sdk_json(key, *, payload=None, timeout=60):
+    """Real Groq requests use the official SDK, matching the working standalone script.
+
+    The transport-injection branch in callers exists only for offline tests.
+    All exceptions exposed to the UI omit the API key, raw provider error
+    messages, request URL with query strings and the original prompt.
+    """
+    try:
+        import groq
+    except ImportError:
+        raise RuntimeError("Chưa cài thư viện Groq SDK. Đóng phần mềm và chạy lại setup_windows.bat.") from None
+    client=None
+    try:
+        client=groq.Groq(api_key=key,timeout=float(timeout),max_retries=0)
+        if payload is None:
+            response=client.models.list()
+        else:
+            response=client.chat.completions.create(**payload)
+        if isinstance(response,dict):
+            data=response
+        elif hasattr(response,"model_dump"):
+            data=response.model_dump()
+        elif hasattr(response,"to_dict"):
+            data=response.to_dict()
+        else:
+            raise RuntimeError("Groq SDK trả dữ liệu chưa hỗ trợ. Hãy cập nhật thư viện Groq.")
+        if not isinstance(data,dict):
+            raise RuntimeError("Groq SDK trả dữ liệu không hợp lệ")
+        return data
+    except groq.APIStatusError as error:
+        code=error.status_code
+        fixed={
+            400:"Nội dung yêu cầu hoặc tham số model không hợp lệ.",
+            401:"Khóa Groq trong database không hợp lệ hoặc đã bị thu hồi; hãy lưu khóa mới.",
+            403:"Groq từ chối quyền truy cập. Nếu mã mẫu Python chạy được, kiểm tra khóa đã lưu trong database và quyền Project.",
+            404:"Groq không nhận ra model hoặc đường dẫn API.",
+            429:"Groq hết hạn mức hoặc giới hạn tốc độ.",
+        }.get(code,"Groq tạm không xử lý được yêu cầu.")
+        # Use a documented status code only; do not echo raw response text.
+        if code==429 or 500<=code<=599:
+            raise TemporaryProviderError("Groq SDK HTTP "+str(code)+": "+fixed) from None
+        raise RuntimeError("Groq SDK HTTP "+str(code)+": "+fixed) from None
+    except groq.APIConnectionError:
+        raise TemporaryProviderError("Groq SDK không kết nối được (mạng/proxy/DNS/TLS). "
+                                     "Thử lại bằng mạng đang chạy đoạn Python mẫu.") from None
+    except groq.APIError:
+        raise RuntimeError("Groq SDK phát sinh lỗi API. Kiểm tra phiên bản SDK, tài khoản và cấu hình model.") from None
+    finally:
+        if client is not None:
+            client.close()
+
+
+
 def _system(agent):
     from main import AGENTS
     from model_router import VIETNAMESE_RULES
@@ -160,10 +213,13 @@ def groq_chat(agent, prompt, *, key, model, transport=None):
     if model.startswith("openai/gpt-oss-"):
         data["reasoning_effort"]="low"
         data["include_reasoning"]=False
-    req=Request(GROQ_ENDPOINT,method="POST",
-        data=json.dumps(data,ensure_ascii=False).encode("utf-8"),
-        headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"})
-    response=_request_json(req,transport)
+    if transport is None:
+        response=_groq_sdk_json(key,payload=data,timeout=90)
+    else:
+        req=Request(GROQ_ENDPOINT,method="POST",
+            data=json.dumps(data,ensure_ascii=False).encode("utf-8"),
+            headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"})
+        response=_request_json(req,transport)
     if not isinstance(response,dict):raise RuntimeError("Groq trả về dữ liệu không hợp lệ")
     choices=response.get("choices") or []
     answer=(choices[0].get("message",{}).get("content") or "").strip() if choices else ""
@@ -222,7 +278,8 @@ def test_groq_chat(key,transport=None):
         data=json.dumps(payload,ensure_ascii=False).encode("utf-8"),
         headers={"Authorization":"Bearer "+key,"Content-Type":"application/json",
                  "Accept":"application/json"})
-    response=_request_json(request,transport,timeout=20)
+    response=(_groq_sdk_json(key,payload=payload,timeout=30) if transport is None
+              else _request_json(request,transport,timeout=20))
     if not isinstance(response,dict) or not isinstance(response.get("choices"),list) or not response["choices"]:
         raise ValueError("Groq không trả về kết quả Chat Completions hợp lệ")
     message=response["choices"][0].get("message",{})
@@ -240,7 +297,8 @@ def test_groq(key,transport=None):
         raise ValueError("Đây có vẻ là API key Grok của xAI. GroqCloud là dịch vụ khác; hãy tạo key tại console.groq.com/keys.")
     request=Request("https://api.groq.com/openai/v1/models",
                     headers={"Authorization":"Bearer "+key})
-    response=_request_json(request,transport,timeout=10)
+    response=(_groq_sdk_json(key,timeout=15) if transport is None
+              else _request_json(request,transport,timeout=10))
     if not isinstance(response,dict) or not isinstance(response.get("data"),list):
         raise ValueError("Groq API phản hồi danh sách model không hợp lệ")
     found={m.get("id","") for m in response["data"] if isinstance(m,dict)}
