@@ -49,7 +49,7 @@ class ClaudeIntegrationTests(unittest.TestCase):
         self.assertNotIn(key,saved)
         env=settings.openai_env({})
         self.assertEqual(router.provider_for("ceo",env),"claude")
-        self.assertEqual(router.provider_for("creative",env),"ollama")
+        self.assertEqual(router.provider_for("creative",env),"auto")
         self.assertEqual(router.configuration_status(env)["routes"]["ceo"]["model"],
                          "claude-sonnet-4-6")
         self.assertNotIn(key,json.dumps(cfg))
