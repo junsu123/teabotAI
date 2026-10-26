@@ -3,8 +3,27 @@ const h = x => String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':
 const $ = s => document.querySelector(s);
 let data={agents:[],accounts:[],jobs:[],missions:[],learnings:[],products:{},proxies:[],training:[],stats:{}}, activeView='hq', focusAgent=null, sceneScale=1, sceneMode='mars';
 const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',dom:'Học đăng bài'};
-async function api(endpoint, body=null){const opts=body===null?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)};const r=await fetch('/api/'+endpoint,opts);const v=await r.json();if(!r.ok)throw Error(v.error||'Lỗi kết nối');return v}
-async function refresh(){try{data=await api('overview'); render()}catch(e){toast(e.message,true)}}
+async function api(endpoint, body=null){
+ const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:12000);
+ const opts=body===null?{signal:ctrl.signal}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal};
+ try{
+  const response=await fetch('/api/'+endpoint,opts);
+  const result=await response.json();
+  if(!response.ok)throw Error(result.error||'Lỗi kết nối máy chủ');
+  return result;
+ }catch(err){
+  if(err.name==='AbortError')throw Error('Máy chủ phản hồi chậm. Hãy kiểm tra /api/health và mức sử dụng CPU.');
+  throw err;
+ }finally{clearTimeout(timer)}
+}
+let refreshBusy=false,lastRefreshError='';
+async function refresh(){
+ if(refreshBusy)return;
+ refreshBusy=true;
+ try{data=await api('overview');lastRefreshError='';render()}
+ catch(err){if(lastRefreshError!==err.message)toast('Không thể cập nhật: '+err.message,true);lastRefreshError=err.message}
+ finally{refreshBusy=false}
+}
 function toast(message,isErr=false){const el=document.createElement('div');el.className='toast'+(isErr?' error':'');el.textContent=message;$('#toasts').append(el);setTimeout(()=>el.remove(),4300)}
 function openModal(content){$('#modalBody').innerHTML=content;$('#modalBackdrop').hidden=false}
 function closeModal(){$('#modalBackdrop').hidden=true;$('#modalBody').innerHTML=''}
@@ -94,7 +113,21 @@ function domView(){const ss=data.training||[];const isActive=ss.some(s=>['starti
 function render(){document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===activeView));$('#breadcrumb').textContent=labels[activeView];const views={hq:home,agents:agentsView,missions:missionsView,shops:shopsView,proxies:proxiesView,products:productsView,jobs:jobsView,memory:memoryView,telegram:telegramView,dom:domView};$('#mainContent').innerHTML=(views[activeView]||home)();if(activeView==='hq'&&sceneMode==='mars'){if($('#marsSvg'))$('#marsSvg').style.transform=`scale(${sceneScale})`;document.querySelectorAll('.room').forEach(el=>{el.addEventListener('click',()=>el.dataset.agent?openAgent(el.dataset.agent):navigate(el.dataset.view));el.addEventListener('keydown',e=>{if(e.key==='Enter')el.click()})})}}
 function openAgent(id){const a=data.agents.find(x=>x.id===id);if(!a)return;const ms=data.missions.filter(m=>m.agent_id===id);openModal(`<div class="eyebrow">PHÒNG BAN AI – CHỈ XEM</div><div style="font-size:43px;margin:14px 0">${a.emoji}</div><h2>${a.name}</h2><p class="sub">${a.room} • ${a.role}</p><div class="note">Bạn chỉ giao nhiệm vụ cho AI CEO. ${a.id==='ceo'?'AI CEO tiếp nhận và điều phối toàn bộ công việc.':'Đây là phòng ban nội bộ, nhận việc qua AI CEO khi chức năng điều phối được kích hoạt.'}</div><h3 style="margin-top:24px">Nhiệm vụ liên quan (${ms.length})</h3>${ms.length?ms.slice(0,4).map((m,i)=>miniTaskRow(m,i)).join(''):'<div class="empty-sm">Chưa có nhiệm vụ trong hàng đợi</div>'}<button class="primary-btn" style="margin-top:20px" onclick="closeModal();showMissionForm()">👑 Giao việc cho AI CEO</button>`)}
 function showMissionForm(){openModal(`<div class="eyebrow">CEO COMMAND CENTER</div><h2>Giao nhiệm vụ cho AI CEO</h2><p class="sub">Bạn chỉ trao đổi với AI CEO. CEO sẽ phân tích, lập kế hoạch, phân công cho các phòng ban và báo cáo về cho bạn khi quy trình điều phối AI được kết nối.</p><form id="missionForm"><input type="hidden" name="agent_id" value="ceo"><div class="note">👑 Người tiếp nhận duy nhất: <b>AI CEO</b></div><div class="field"><label>Tiêu đề nhiệm vụ</label><input name="title" required minlength="3" placeholder="Ví dụ: Phân tích kế hoạch bán trà đinh lăng" maxlength="150"></div><div class="field"><label>Yêu cầu chi tiết</label><textarea name="detail" maxlength="2000" placeholder="Mục tiêu, sản phẩm, nền tảng, thời hạn..."></textarea></div><div class="form-bottom"><button class="primary-btn">Gửi nhiệm vụ cho CEO</button><span class="hint">Hiện chỉ lưu vào hàng đợi; CEO tự điều phối chưa được kích hoạt.</span></div></form>`);$('#missionForm').addEventListener('submit',async e=>{e.preventDefault();await submitForm('missions',e.target)})}
-function showCEOReport(id){const m=data.missions.find(x=>x.id===id);if(!m)return;const sts={pending:'Chờ CEO tiếp nhận',in_progress:'CEO đang điều phối',done:'CEO đã lập báo cáo',blocked:'Bị chặn – cần xử lý lỗi'};const steps=m.delegations||[];openModal(`<div class="eyebrow">CEO COMMAND CENTER • #${m.id}</div><h2>${h(m.title)}</h2><p class="sub">👑 AI CEO • ${h(sts[m.status]||m.status)}</p>${m.ceo_error?`<div class="note warning">${h(m.ceo_error)}</div>`:''}<h3 style="margin:18px 0 10px">Phòng ban CEO đã phân công (${steps.length} bản ghi)</h3>${steps.length?steps.map(x=>`<div class="info-row"><span class="ic">♟</span><div><strong>${h(x.agent_id)} — ${h(x.status)}</strong><p style="white-space:pre-wrap">${h((x.result||x.error||'Đang xử lý').slice(0,2400))}</p></div></div>`).join(''):'<div class="empty-sm">Chưa có công việc được phân công</div>'}<h3 style="margin:22px 0 10px">Báo cáo AI CEO</h3><div class="note" style="white-space:pre-wrap">${h(m.ceo_report||'Chưa có báo cáo. Nếu đang pending, chương trình sẽ tự nhận sau khi Ollama sẵn sàng.').slice(0,16000))}</div>${m.status==='blocked'?'<button class="primary-btn" style="margin-top:20px" onclick="closeModal();retryCEOTask('+m.id+')">↻ Thử lại nhiệm vụ</button>':''}`)}
+function showCEOReport(id){
+ const m=data.missions.find(x=>x.id===id);
+ if(!m)return;
+ const statusText={pending:'Chờ CEO tiếp nhận',in_progress:'CEO đang điều phối',done:'CEO đã lập báo cáo',blocked:'Bị chặn – cần xử lý lỗi'};
+ const steps=m.delegations||[];
+ const warnings=m.ceo_error?`<div class="note warning">${h(m.ceo_error)}</div>`:'';
+ const rows=steps.map(x=>`<div class="info-row"><span class="ic">♟</span><div><strong>${h(x.agent_id)} – ${h(x.status)}</strong><p style="white-space:pre-wrap">${h((x.result||x.error||'Đang xử lý').slice(0,2400))}</p></div></div>`).join('');
+ const stepsHtml=rows||'<div class="empty-sm">CEO đang lập kế hoạch hoặc chưa giao việc</div>';
+ const retryButton=m.status==='blocked'?`<button class="primary-btn" style="margin-top:20px" onclick="closeModal();retryCEOTask(${m.id})">↻ Thử lại nhiệm vụ</button>`:'';
+ openModal(`<div class="eyebrow">CEO COMMAND CENTER • #${m.id}</div>
+ <h2>${h(m.title)}</h2><p class="sub">👑 AI CEO • ${h(statusText[m.status]||m.status)}</p>
+ ${warnings}<h3 style="margin:18px 0 10px">Phòng ban CEO đã phân công (${steps.length} bản ghi)</h3>
+ ${stepsHtml}<h3 style="margin:22px 0 10px">Báo cáo AI CEO</h3>
+ <div class="note" style="white-space:pre-wrap">${h(m.ceo_report||m.ceo_plan||'CEO chưa có báo cáo. Hãy xem trạng thái Ollama.').slice(0,16000)}</div>${retryButton}`);
+}
 async function retryCEOTask(id){try{await api('missions/retry',{id});closeModal();toast('Đã đưa nhiệm vụ về hàng đợi CEO');await refresh()}catch(e){toast(e.message,true)}}
 function showShopForm(){openModal(`<div class="eyebrow">MULTI-SHOP HUB</div><h2>Thêm Chrome Profile</h2><p class="sub">Tạo profile riêng; chọn proxy đã nhập ở Kho Proxy.</p><form id="shopForm"><div class="field"><label>ID tài khoản (không dấu, không khoảng trắng)</label><input name="id" required pattern="[a-z0-9][a-z0-9_-]{1,39}" placeholder="shopee_01"></div><div class="field"><label>Tên hiển thị</label><input name="name" required placeholder="Shop trà thảo mộc 01"></div><div class="field"><label>Nền tảng</label><select name="platform"><option value="shopee">Shopee</option><option value="tiktok">TikTok Shop</option></select></div><div class="field"><label>Proxy sử dụng</label><select name="proxy_id"><option value="">Không sử dụng proxy</option>${(data.proxies||[]).map(p=>`<option value="${h(p.id)}">${h(p.name)} (${h(p.host)}:${p.port})</option>`).join('')}</select></div><div class="note">Muốn thêm proxy mới? Đóng cửa sổ này và chọn <b>Kho Proxy → Thêm proxy</b>.</div><div class="form-bottom"><button class="primary-btn">Tạo profile</button></div></form>`);$('#shopForm').addEventListener('submit',async e=>{e.preventDefault();await submitForm('accounts',e.target)})}
 function showProxyForm(pid=''){
@@ -130,6 +163,6 @@ async function approveJob(id){if(!confirm(`Duyệt nhiệm vụ #${id}? Phải c
 async function rejectJob(id){if(!confirm(`Từ chối nhiệm vụ #${id}?`))return;try{await api('jobs/reject',{id});toast('Đã từ chối');await refresh()}catch(e){toast(e.message,true)}}
 function copyText(t){if(navigator.clipboard?.writeText)navigator.clipboard.writeText(t).then(()=>toast('Đã sao chép')).catch(()=>toast('Không thể sao chép',true));else toast('Trình duyệt chưa hỗ trợ sao chép',true)}
 $('#nav').addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)navigate(b.dataset.view)});$('#refreshBtn').addEventListener('click',refresh);$('#closeModal').addEventListener('click',closeModal);$('#modalBackdrop').addEventListener('click',e=>{if(e.target.id==='modalBackdrop')closeModal()});window.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
-setInterval(()=>{if(['dom','missions','hq'].includes(activeView)&&$('#modalBackdrop')?.hidden)refresh()},3500);
+setInterval(()=>{if(['dom','missions','hq'].includes(activeView)&&$('#modalBackdrop')?.hidden&&document.visibilityState==='visible')refresh()},9000);
 setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})},1000);
 refresh();
