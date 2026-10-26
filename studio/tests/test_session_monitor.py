@@ -1,83 +1,106 @@
-"""Offline tests: read-only local session inspection; never persist cookie secrets."""
+"""Offline checks for protected-page DOM verification (no cookie authentication)."""
 import json
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-LEGACY=Path(__file__).resolve().parents[2]/"legacy"/"tea_ai_local"
-sys.path.insert(0,str(LEGACY))
+LEGACY = Path(__file__).resolve().parents[2] / "legacy" / "tea_ai_local"
+sys.path.insert(0, str(LEGACY))
 import session_monitor as sm
 
 
-class Locator:
-    def __init__(self,visible=False):
-        self.visible=visible
-    @property
-    def first(self):
-        return self
-    def is_visible(self, timeout=1000):
-        return self.visible
-
-
 class FakePage:
-    def __init__(self,url,password=False,seller=False):
-        self.url=url
-        self.password=password
-        self.seller=seller
+    def __init__(self, url, menu_count=0, password=False, verify=False):
+        self.url = url
+        self.result = {
+            "seller_menu_count": menu_count, "password_visible": password,
+            "verification_visible": verify,
+        }
     def is_closed(self):
         return False
-    def locator(self, selector):
-        return Locator(self.password if 'password' in selector else self.seller)
+    def evaluate(self, script):
+        assert "seller_menu_count" in script
+        return self.result
 
 
 class FakeContext:
-    def __init__(self,page,cookies):
-        self.pages=[page]
-        self._cookies=cookies
-        self.requested_urls=[]
-    def cookies(self,urls):
-        self.requested_urls=urls
-        return self._cookies
+    def __init__(self, page):
+        self.pages = [page]
+    def cookies(self, *_):
+        raise AssertionError("Cookie must not be read to determine login")
 
 
 class SessionMonitorTests(unittest.TestCase):
-    def test_login_form_always_means_logged_out(self):
-        status,_=sm.classify('shopee','https://banhang.shopee.vn/login',4,True)
-        self.assertEqual(status,'logged_out')
+    def test_portal_url_alone_does_not_mean_login(self):
+        state, _ = sm.classify("shopee", "https://banhang.shopee.vn/portal/home", 100)
+        self.assertEqual(state, "unknown")
 
-    def test_authenticated_portal_with_cookie(self):
-        status,_=sm.classify('shopee','https://banhang.shopee.vn/portal/home',3)
-        self.assertEqual(status,'logged_in')
+    def test_verified_seller_navigation_indicates_login(self):
+        state, _ = sm.classify("shopee", "https://banhang.shopee.vn/portal/home",
+                               0, seller_menu_count=2)
+        self.assertEqual(state, "logged_in")
 
-    def test_cookie_alone_is_not_proof(self):
-        status,_=sm.classify('shopee','https://banhang.shopee.vn/',20)
-        self.assertEqual(status,'unknown')
-        status,_=sm.classify('tiktok','https://seller-vn.tiktok.com/',20)
-        self.assertEqual(status,'unknown')
+    def test_tiktok_deep_page_with_two_seller_sections(self):
+        state, _ = sm.classify("tiktok", "https://seller-vn.tiktok.com/product/manage",
+                               0, seller_menu_count=3)
+        self.assertEqual(state, "logged_in")
 
-    def test_missing_cookie_cannot_be_logged_in(self):
-        status,_=sm.classify('shopee','https://banhang.shopee.vn/portal/home',0)
-        self.assertEqual(status,'unknown')
+    def test_login_form_even_with_navigation_is_logged_out(self):
+        state, _ = sm.classify("shopee", "https://banhang.shopee.vn/account/login",
+                               100, password_visible=True, seller_menu_count=10)
+        self.assertEqual(state, "logged_out")
 
-    def test_cookie_values_never_leave_browser_process(self):
-        context=FakeContext(FakePage('https://banhang.shopee.vn/portal/home'),
-                            [{'name':'session','value':'SUPER_SECRET_COOKIE_VALUE','domain':'.shopee.vn'}])
-        account={'platform':'shopee','start_url':'https://banhang.shopee.vn/'}
-        with tempfile.TemporaryDirectory() as t:
-            report=sm.inspect_and_save(context,account,Path(t))
-            saved=(Path(t)/sm.STATUS_FILE).read_text(encoding='utf-8')
-            self.assertEqual(report['status'],'logged_in')
-            self.assertEqual(report['cookie_count'],1)
-            self.assertNotIn('SUPER_SECRET_COOKIE_VALUE',saved)
-            self.assertNotIn('session',saved.lower())
-            self.assertEqual(context.requested_urls,[account['start_url']])
+    def test_verification_requires_human(self):
+        state, _ = sm.classify("tiktok", "https://seller-vn.tiktok.com/account/verify",
+                               0, verification_visible=True)
+        self.assertEqual(state, "verification_required")
 
-    def test_private_status_does_not_claim_login_when_absent(self):
-        with tempfile.TemporaryDirectory() as t:
-            x=sm.read_status(Path(t))
-            self.assertEqual(x['status'],'unknown')
+    def test_wrong_domain_is_never_valid(self):
+        state, _ = sm.classify("shopee", "https://banhang.shopee.vn.evil.example/portal",
+                               0, seller_menu_count=3)
+        self.assertEqual(state, "unknown")
+
+    def test_no_private_auth_data_saved(self):
+        page = FakePage("https://banhang.shopee.vn/portal/product/list?token=SUPER_SECRET",
+                        menu_count=3)
+        ctx = FakeContext(page)
+        account = {"platform": "shopee", "start_url": "https://banhang.shopee.vn/"}
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            result = sm.inspect_and_save(ctx, account, folder)
+            self.assertEqual(result["status"], "logged_in")
+            status_text = (folder / sm.STATUS_FILE).read_text(encoding="utf-8")
+            self.assertNotIn("SUPER_SECRET", status_text)
+            self.assertNotIn("cookie_count", status_text)
+            # No URL with session-bearing query is stored as a probe.
+            self.assertFalse((folder / sm.PROBE_FILE).exists())
+
+    def test_save_safe_verified_protected_url_and_expire(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            self.assertTrue(sm.save_probe(folder, "shopee",
+                          "https://banhang.shopee.vn/portal/products"))
+            account = {"platform": "shopee", "start_url": "https://banhang.shopee.vn/"}
+            self.assertEqual(sm.probe_url(folder, account),
+                             "https://banhang.shopee.vn/portal/products")
+            self.assertFalse(sm.save_probe(folder, "shopee",
+                             "https://banhang.shopee.vn.evil.test/portal/products"))
+            sm.write_status(folder, "logged_in", message="DOM đã xác nhận")
+            saved = json.loads((folder / sm.STATUS_FILE).read_text(encoding="utf-8"))
+            saved["checked_at"] = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+            (folder / sm.STATUS_FILE).write_text(json.dumps(saved), encoding="utf-8")
+            self.assertEqual(sm.read_status(folder)["status"], "unknown")
+
+    def test_invalidates_cookie_only_legacy_status(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            (folder / sm.STATUS_FILE).write_text(
+                json.dumps({"status":"logged_in", "cookie_count":100, "checked_at":sm.now()}),
+                encoding="utf-8")
+            self.assertEqual(sm.read_status(folder)["status"], "unknown")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
