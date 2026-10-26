@@ -5,7 +5,7 @@ let data={agents:[],accounts:[],jobs:[],missions:[],learnings:[],products:{},pro
 let forumMissionId=0,forumData=null,forumBusy=false;
 const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt ChatGPT & Telegram',dom:'Học đăng bài'};
 async function api(endpoint, body=null){
- const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:12000);
+ const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:endpoint.endsWith('/test')?20000:12000);
  const opts=body===null?{signal:ctrl.signal}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal};
  try{
   const response=await fetch('/api/'+endpoint,opts);
@@ -212,6 +212,8 @@ function aiSettingsSection(){
  <button type="button" class="small-btn" onclick="testConnection('groq')">✓ Kiểm tra Groq</button>
  <button type="button" class="small-btn" onclick="removeIntegrationSecret('gemini')" ${cfg.gemini_key_configured?'':'disabled'}>Xóa Gemini key</button>
  <button type="button" class="small-btn" onclick="removeIntegrationSecret('groq')" ${cfg.groq_key_configured?'':'disabled'}>Xóa Groq key</button></div>
+ <div id="groqConnectionResult" class="note" role="status" aria-live="polite">
+ Bấm Kiểm tra Groq để xác minh ngay cả khi chưa lưu key. Nếu thành công, hãy bấm Lưu cấu hình AI để sử dụng khóa.</div>
  <div class="note">Thứ tự ưu tiên: <strong>Gemini → Groq → Claude → OpenAI → Ollama</strong>.
  Trong chế độ TỰ ĐỘNG, Claude và OpenAI chỉ được thử nếu bạn cho phép API trả phí. Không có giới hạn đảm bảo miễn phí: quota tùy tài khoản Google/Groq.</div>
  <label class="checkbox-line"><input type="checkbox" name="allow_paid_fallback" ${cfg.allow_paid_fallback?'checked':''}>
@@ -354,10 +356,24 @@ async function removeIntegrationSecret(provider){
  catch(e){toast('Không xóa được '+label+': '+e.message,true)}
 }
 async function testConnection(target){
- try{toast('Đang kiểm tra kết nối '+target+'...');const r=await api('settings/'+target+'/test',{check:true});
- toast((r.message||'Kết nối thành công')+(r.bot_username?' (@'+r.bot_username+')':'')+
-  (r.unlisted_models?.length?' • Model chưa xuất hiện trong danh sách: '+r.unlisted_models.join(', '):''));}
- catch(e){toast('Kết nối '+target+' thất bại: '+e.message,true)}
+ const el=target==='groq'?$('#groqConnectionResult'):null;
+ const typed=target==='groq'?($('#aiSettingsForm input[name="groq_api_key"]')?.value||''):'';
+ const payload=target==='groq'?{api_key:typed,check:true}:{check:true};
+ if(el)el.textContent='Đang liên hệ GroqCloud qua HTTPS và kiểm tra key...';
+ try{
+  const r=await api('settings/'+target+'/test',payload);
+  let info=(r.message||'Kết nối thành công')+
+    (r.bot_username?' (@'+r.bot_username+')':'')+
+    (r.unlisted_models?.length?' • Model chưa xuất hiện: '+r.unlisted_models.join(', '):'')+
+    (r.supported_models?.length?' • Model khả dụng: '+r.supported_models.join(', '):'')+
+    (r.warning?' • '+r.warning:'');
+  if(el){
+   el.textContent='✓ '+info+(typed?' Khóa vừa nhập chưa được lưu; bấm Lưu cấu hình AI để sử dụng.':'');
+  }else toast(info);
+ }catch(e){
+  if(el)el.textContent='✕ '+e.message;
+  toast('Kiểm tra '+target+' thất bại: '+e.message,true);
+ }
 }
 async function controlTelegram(action){
  try{
