@@ -430,22 +430,23 @@ async function removeIntegrationSecret(provider){
  catch(e){toast('Không xóa được '+label+': '+e.message,true)}
 }
 async function testConnection(target){
- const el=target==='groq'?$('#groqConnectionResult'):null;
- const typed=target==='groq'?($('#aiSettingsForm input[name="groq_api_key"]')?.value||''):'';
- const payload=target==='groq'?{api_key:typed,check:true}:{check:true};
- if(el)el.textContent='Đang liên hệ GroqCloud qua HTTPS và kiểm tra key...';
+ const isCard=target==='gemini'||target==='groq';
+ const el=isCard?$('#'+target+'ConnectionResult'):null;
+ const keyField=isCard?$('#aiSettingsForm input[name="'+target+'_api_key"]'):null;
+ const typed=keyField?.value?.trim()||'';
+ const payload=isCard?{api_key:typed,check:true}:{check:true};
+ if(el){el.hidden=false;el.classList.remove('error');el.textContent='Đang kiểm tra kết nối '+target+'...';}
  try{
-  const r=await api('settings/'+target+'/test',payload);
-  let info=(r.message||'Kết nối thành công')+
-    (r.bot_username?' (@'+r.bot_username+')':'')+
-    (r.unlisted_models?.length?' • Model chưa xuất hiện: '+r.unlisted_models.join(', '):'')+
-    (r.supported_models?.length?' • Model khả dụng: '+r.supported_models.join(', '):'')+
-    (r.warning?' • '+r.warning:'');
-  if(el){
-   el.textContent='✓ '+info+(typed?' Khóa vừa nhập chưa được lưu; bấm Lưu cấu hình AI để sử dụng.':'');
-  }else toast(info);
+  const result=await api('settings/'+target+'/test',payload);
+  const info=(result.message||'Kết nối thành công')+
+   (result.bot_username?' (@'+result.bot_username+')':'')+
+   (result.unlisted_models?.length?' • Model chưa xuất hiện: '+result.unlisted_models.join(', '):'')+
+   (result.supported_models?.length?' • Model được tài khoản hỗ trợ: '+result.supported_models.join(', '):'')+
+   (result.warning?' • '+result.warning:'');
+  if(el)el.textContent='✓ '+info+(typed?' Khóa vừa nhập chưa được lưu; bấm Lưu cấu hình AI để sử dụng.':'');
+  else toast(info);
  }catch(e){
-  if(el)el.textContent='✕ '+e.message;
+  if(el){el.hidden=false;el.classList.add('error');el.textContent='✕ '+e.message;}
   toast('Kiểm tra '+target+' thất bại: '+e.message,true);
  }
 }
