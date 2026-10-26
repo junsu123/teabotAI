@@ -229,8 +229,8 @@ class FreeFirstTests(unittest.TestCase):
             self.assertTrue(req.full_url.endswith("/chat/completions"))
             self.assertEqual(req.get_header("Authorization"),"Bearer gsk-fake")
             body=json.loads(req.data)
-            self.assertEqual(body["model"],"openai/gpt-oss-20b")
-            self.assertLessEqual(body["max_completion_tokens"],160)
+            self.assertEqual(body["model"],"openai/gpt-oss-120b")
+            self.assertEqual(body["max_completion_tokens"],100)
             self.assertEqual(len(body["messages"]),1)
             return {"choices":[{"message":{"role":"assistant","content":"OK"}}]}
         response=settings.test_groq_chat(http=ok_chat,key_override="gsk-fake")
