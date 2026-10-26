@@ -14,8 +14,14 @@ class TemporaryProviderError(RuntimeError):
     """Only network, rate-limit and provider outages may trigger backup."""
     pass
 
-GEMINI_MODELS=("gemini-3.8-flash","gemini-3.5-flash-lite")
+# Only models documented with free-tier text input and output eligibility.
+# API calls may still be billed if the user's Google project is on paid tier.
+GEMINI_MODELS=("gemini-3.8-flash","gemini-3.6-flash","gemini-3.5-flash-lite",
+               "gemini-3.1-flash-lite","gemini-2.5-flash","gemini-2.5-flash-lite")
+# Listed under Groq's free-plan rate limits. Not guaranteed free on paid accounts.
 GROQ_MODELS=("openai/gpt-oss-120b","openai/gpt-oss-20b","qwen/qwen3.8-27b")
+GEMINI_FREE_TIER_MODELS=frozenset(GEMINI_MODELS)
+GROQ_FREE_TIER_MODELS=frozenset(GROQ_MODELS)
 GEMINI_DEFAULT={a:("gemini-3.5-flash-lite" if a in ("creative","analyst") else "gemini-3.8-flash")
  for a in ("ceo","strategy","compliance","research","creative","analyst")}
 GROQ_DEFAULT={a:("openai/gpt-oss-20b" if a in ("creative","analyst") else "openai/gpt-oss-120b")
