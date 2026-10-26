@@ -30,6 +30,8 @@ import proxy_store
 import ceo_engine
 import agent_forum
 import model_router
+import integration_settings
+import telegram_manager
 import main as legacy_ai
 import uuid
 import time
@@ -170,7 +172,9 @@ def overview():
  return {'agents':AGENTS,'accounts':shops,'jobs':jobs,'missions':ms,
     'learnings':list_learnings(), 'products':list_products(), 'proxies':proxy_store.all_proxies(), 'training':training_summary(),
     'ollama':ollama_health(),
-    'model_routing':model_router.configuration_status(),
+    'model_routing':model_router.configuration_status(integration_settings.openai_env()),
+    'connection_settings':integration_settings.status(),
+    'telegram_process':telegram_manager.status(),
     'openai_usage':model_router.usage_month(DATA/'openai_usage.sqlite3'),
     'stats':{'agents':len(AGENTS),'shops':len(shops),'jobs_open':sum(x['status'] not in ('posted','rejected','failed') for x in jobs),
              'missions_open':sum(x['status']!='done' for x in ms),'lessons':len(list_learnings())},
@@ -214,6 +218,8 @@ class Handler(BaseHTTPRequestHandler):
     return json_reply(self,{'mission':dict(mission),'messages':rows,'count':len(rows),
             'final_decision':next((x['body'] for x in reversed(rows) if x['kind']=='decision' and x['sender']=='ceo'),None)})
    except ValueError as e:return error_reply(self,400,str(e))
+  if path=='/api/settings':return json_reply(self,{'settings':integration_settings.status(),
+      'telegram':telegram_manager.status(),'usage':model_router.usage_month(DATA/'openai_usage.sqlite3')})
   if path=='/api/training':return json_reply(self,{'sessions':training_summary()})
   if path=='/api/training/detail':
    sid=parse_qs(urlparse(self.path).query).get('id',[''])[0]
@@ -242,6 +248,24 @@ class Handler(BaseHTTPRequestHandler):
    if n<=0 or n>MAX_JSON:raise ValueError('Dữ liệu vượt quá giới hạn')
    body=json.loads(self.rfile.read(n))
    if not isinstance(body,dict):raise ValueError('Cần đối tượng JSON')
+   if path=='/api/settings/openai':
+    result=integration_settings.save_openai(body)
+    return json_reply(self,{'ok':True,'settings':result,
+        'message':'Đã lưu OpenAI API và lựa chọn agent trong phần mềm.'})
+   if path=='/api/settings/telegram':
+    if telegram_manager.status()['running']:
+     raise ValueError('Hãy tắt Telegram Bot trước khi đổi token hoặc User ID.')
+    result=integration_settings.save_telegram(body)
+    return json_reply(self,{'ok':True,'settings':result,
+        'message':'Đã lưu Bot Token và Telegram User ID trong phần mềm.'})
+   if path=='/api/settings/openai/test':
+    return json_reply(self,integration_settings.test_openai())
+   if path=='/api/settings/telegram/test':
+    return json_reply(self,integration_settings.test_telegram())
+   if path=='/api/settings/telegram/start':
+    return json_reply(self,{'ok':True,'telegram':telegram_manager.start()})
+   if path=='/api/settings/telegram/stop':
+    return json_reply(self,{'ok':True,'telegram':telegram_manager.stop()})
    if path=='/api/accounts':
     pid=sanitize(body.get('proxy_id',''),40)
     if pid:proxy_store.get_proxy(pid)
@@ -413,7 +437,8 @@ def ceo_chat(agent,prompt):
  # All providers receive mandatory Vietnamese-language instructions.
  def local_call(role, message):
   return legacy_ai.chat(role,message,timeout_seconds=100,max_output_tokens=520)
- return model_router.chat(agent,prompt,local_call,DATA/'openai_usage.sqlite3')
+ return model_router.chat(agent,prompt,local_call,DATA/'openai_usage.sqlite3',
+                          env=integration_settings.openai_env())
 
 def main():
  import argparse
@@ -423,6 +448,11 @@ def main():
  args=parser.parse_args()
  if not (1024<=args.port<=65535):raise SystemExit('Port không hợp lệ')
  init()
+ if integration_settings.read().get('telegram_autostart'):
+  try:telegram_manager.start()
+  except Exception as exc:
+   print('Telegram Bot chưa tự chạy được: '+type(exc).__name__+
+         '. Vào mục Cài đặt Telegram để kiểm tra.')
  stop_event=threading.Event()
  worker=threading.Thread(target=ceo_engine.worker_loop,
      args=(DB,ceo_chat,list_products,stop_event),daemon=True,name='AI-CEO-Worker')
@@ -438,6 +468,7 @@ def main():
  except KeyboardInterrupt:pass
  finally:
   stop_event.set()
+  telegram_manager.stop()
   server.server_close()
 
 if __name__=='__main__':main()
