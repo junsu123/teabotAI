@@ -187,7 +187,8 @@ def gemini_chat(agent, prompt, *, key, model, transport=None):
     if not key:raise RuntimeError("Chưa lưu Gemini API key trong phần mềm")
     data={"systemInstruction":{"parts":[{"text":_system(agent)}]},
           "contents":[{"role":"user","parts":[{"text":str(prompt)[:20000]}]}],
-          "generationConfig":{"maxOutputTokens":1100,"temperature":0.35}}
+          "generationConfig":{"maxOutputTokens":3500 if "VEO3_5_SCENES_STRUCTURED" in str(prompt) else 1100,
+                              "temperature":0.35}}
     req=Request(GEMINI_ENDPOINT+model+":generateContent",method="POST",
                 data=json.dumps(data,ensure_ascii=False).encode("utf-8"),
                 headers={"x-goog-api-key":key,"Content-Type":"application/json"})
@@ -207,7 +208,8 @@ def groq_chat(agent, prompt, *, key, model, transport=None):
     if not key:raise RuntimeError("Chưa lưu Groq API key trong phần mềm")
     # GPT-OSS can spend part of max_completion_tokens on internal reasoning.
     # Low effort leaves more room for the actual final Vietnamese answer.
-    data={"model":model,"temperature":0.3,"max_completion_tokens":1600,
+    data={"model":model,"temperature":0.3,
+          "max_completion_tokens":3500 if "VEO3_5_SCENES_STRUCTURED" in str(prompt) else 1600,
           "messages":[{"role":"system","content":_system(agent)},
                       {"role":"user","content":str(prompt)[:20000]}]}
     if model.startswith("openai/gpt-oss-"):
