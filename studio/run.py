@@ -255,6 +255,16 @@ class Handler(BaseHTTPRequestHandler):
     settings=integration_settings.save_ai_providers(body)
     return json_reply(self,{'ok':True,'settings':settings,
         'message':'Đã lưu nhà cung cấp và mô hình AI cho từng vị trí.'})
+   if path=='/api/settings/gemini/test':
+    return json_reply(self,integration_settings.test_gemini())
+   if path=='/api/settings/groq/test':
+    return json_reply(self,integration_settings.test_groq())
+   if path=='/api/settings/gemini/remove-key':
+    return json_reply(self,{'ok':True,'settings':integration_settings.remove_gemini_key(),
+      'message':'Đã xóa Gemini API key. Tuyến tự động vẫn có Groq dự phòng.'})
+   if path=='/api/settings/groq/remove-key':
+    return json_reply(self,{'ok':True,'settings':integration_settings.remove_groq_key(),
+      'message':'Đã xóa Groq API key. Tuyến tự động vẫn có Gemini và Ollama.'})
    if path=='/api/settings/claude/test':
     return json_reply(self,integration_settings.test_claude())
    if path=='/api/settings/claude/remove-key':
