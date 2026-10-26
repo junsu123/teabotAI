@@ -24,6 +24,31 @@ GEMINI_ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/"
 GROQ_ENDPOINT="https://api.groq.com/openai/v1/chat/completions"
 
 
+
+def _provider_error_hint(error):
+    """Extract only documented error codes/types; never display freeform server text.
+
+    Provider error messages may contain echoed request data or credentials.
+    Those raw messages must not be shown in UI, logs or raised exceptions.
+    """
+    try:
+        raw=error.read(4096)
+        data=json.loads(raw.decode("utf-8",errors="replace"))
+        info=data.get("error",{}) if isinstance(data,dict) else {}
+        if not isinstance(info,dict):
+            return ""
+        code=info.get("code","")
+        kind=info.get("type","")
+    except (ValueError,AttributeError,OSError,TypeError):
+        return ""
+    if code=="model_permission_blocked_org":
+        return "Model bị chặn ở cấp tổ chức. Vào console.groq.com/settings/limits để cấp quyền."
+    if code=="model_permission_blocked_project":
+        return "Model bị chặn ở cấp dự án. Vào console.groq.com/settings/project/limits để cấp quyền."
+    if kind=="permissions_error":
+        return "Groq trả về permissions_error: kiểm tra quyền tổ chức, dự án và model."
+    return ""
+
 def _request_json(request, transport=None, timeout=60):
     try:
         if transport is None:
@@ -41,6 +66,10 @@ def _request_json(request, transport=None, timeout=60):
             498:"Nhà cung cấp tạm hết năng lực phục vụ."
         }
         detail=reasons.get(code,"Máy chủ từ chối yêu cầu hoặc tạm gián đoạn.")
+        if code==403:
+            provider_hint=_provider_error_hint(ex)
+            if provider_hint:
+                detail=provider_hint
         if code in (429,498) or 500<=code<=599:
             raise TemporaryProviderError("HTTP "+str(code)+": "+detail) from None
         raise RuntimeError("HTTP "+str(code)+": "+detail) from None
