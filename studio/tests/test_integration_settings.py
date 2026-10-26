@@ -77,6 +77,21 @@ class SetupTests(unittest.TestCase):
         self.assertFalse(settings.status()["openai_key_configured"])
         self.assertFalse(settings.status()["telegram_token_configured"])
 
+    def test_telegram_bootstrap_only_token_and_key_removal(self):
+        settings.save_telegram({"bot_token":"123:testing_fake",
+                                "telegram_allowed_ids":"","telegram_autostart":False})
+        env=settings.telegram_env()
+        self.assertEqual(env["TEA_TELEGRAM_ALLOWED_IDS"],"")
+        self.assertTrue(settings.status()["telegram_token_configured"])
+        result=settings.remove_telegram_token()
+        self.assertFalse(result["telegram_token_configured"])
+        settings.save_openai({"api_key":"sk-mock-key-not-real",
+                              "openai_agents":["ceo"],"monthly_limit_usd":12})
+        status=settings.remove_openai_key()
+        self.assertFalse(status["openai_key_configured"])
+        self.assertEqual(status["openai_agents"],[])
+        self.assertNotIn("sk-mock",self.settings_file.read_text(encoding="utf-8"))
+
     def test_gui_settings_override_environment(self):
         settings.save_openai({"openai_agents":[]})
         env=settings.openai_env({"TEA_OPENAI_AGENTS":"ceo",
