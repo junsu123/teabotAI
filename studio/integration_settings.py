@@ -347,9 +347,16 @@ def remove_groq_key():
     delete_secret(GROQ_SECRET)
     return status()
 
-def test_gemini(http=None):
+def test_gemini(http=None, key_override=None):
+    """Read-only API-key test. A pasted unsaved key is tested without persistence."""
     from free_cloud_providers import test_gemini as call_test
-    return call_test(_get(GEMINI_SECRET),transport=http)
+    if key_override is not None:
+        if not isinstance(key_override,str) or len(key_override)>4096:
+            raise ValueError("Định dạng Gemini API key không hợp lệ")
+        key=key_override.strip() or _get(GEMINI_SECRET)
+    else:
+        key=_get(GEMINI_SECRET)
+    return call_test(key,transport=http)
 
 def test_groq(http=None, key_override=None):
     """Test a pasted key without saving it; otherwise use the Windows vault."""
