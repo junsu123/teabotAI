@@ -162,6 +162,59 @@ class FreeFirstTests(unittest.TestCase):
         self.assertIn("gemini-3.8-flash",checked["supported_models"])
         self.assertFalse(settings.status()["gemini_key_configured"])
 
+    def test_saved_groq_agent_checks_saved_db_key_and_selected_ceo_model(self):
+        self.setup_free()
+        self.assertEqual(settings.read()["groq_models"]["ceo"],"openai/gpt-oss-120b")
+        observed=[]
+        def call(req):
+            observed.append(req)
+            self.assertEqual(req.get_method(),"POST")
+            self.assertEqual(req.get_header("Authorization"),"Bearer test-groq-not-real")
+            payload=json.loads(req.data.decode("utf-8"))
+            self.assertEqual(payload["model"],"openai/gpt-oss-120b")
+            self.assertEqual(payload["reasoning_effort"],"low")
+            self.assertIs(payload["include_reasoning"],False)
+            self.assertIn("system",payload["messages"][0]["role"])
+            return {"choices":[{"message":{"content":"Kết nối hoạt động."}}]}
+        result=settings.test_saved_groq_agent("ceo",http=call)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["model"],"openai/gpt-oss-120b")
+        self.assertEqual(result["key_source"],"encrypted_sqlite")
+        self.assertEqual(len(observed),1)
+        self.assertNotIn("test-groq-not-real",str(result))
+
+    def test_unsaved_test_key_does_not_replace_runtime_key(self):
+        self.setup_free()
+        old="test-groq-not-real"
+        new="gsk-new-key-only-in-test"
+        def check_typed(req):
+            self.assertEqual(req.get_header("Authorization"),"Bearer "+new)
+            return {"data":[{"id":"openai/gpt-oss-120b"}]}
+        self.assertTrue(settings.test_groq(http=check_typed,key_override=new)["ok"])
+        def check_saved(req):
+            self.assertEqual(req.get_header("Authorization"),"Bearer "+old)
+            return {"choices":[{"message":{"content":"OK"}}]}
+        self.assertTrue(settings.test_saved_groq_agent("ceo",http=check_saved)["ok"])
+        # Saving the updated key must cause the runtime diagnostic to use it.
+        settings.set_secret(settings.GROQ_SECRET,new)
+        def check_replaced(req):
+            self.assertEqual(req.get_header("Authorization"),"Bearer "+new)
+            return {"choices":[{"message":{"content":"OK"}}]}
+        self.assertTrue(settings.test_saved_groq_agent("ceo",http=check_replaced)["ok"])
+
+    def test_agent_specific_runtime_403_includes_safe_model(self):
+        self.setup_free()
+        env=settings.openai_env({})
+        env["TEA_AGENT_PROVIDER_CEO"]="groq"
+        def forbidden(req):
+            raise HTTPError(req.full_url,403,"Forbidden",hdrs=None,fp=BytesIO(b""))
+        with self.assertRaisesRegex(RuntimeError,"Groq/openai/gpt-oss-120b") as result:
+            model_router.chat("ceo","Nhiệm vụ của CEO",
+                lambda a,p:self.fail("Do not fall back silently"),
+                self.db,env=env,transport=forbidden)
+        self.assertIn("HTTP 403",str(result.exception))
+        self.assertNotIn(env["GROQ_API_KEY"],str(result.exception))
+
     def test_live_groq_chat_distinguishes_models_403_and_chat_success(self):
         # The models listing may fail while the chat-completions endpoint works.
         # Do not silently consume tokens from the ordinary /models test.
