@@ -32,7 +32,11 @@ const eButton=(text,fn='')=>`<button class="primary-btn" ${fn}>${text}</button>`
 const tag=(s)=>`<span class="chip ${s==='tiktok'?'purple':s==='shopee'?'orange':s==='done'?'':'gray'}">${h(s)}</span>`;
 const fmtDate=s=>{if(!s)return '—';try{return new Date(s).toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}catch{return s}};
 const empty=(icon,title,desc)=>`<div class="empty"><span class="large">${icon}</span><b>${title}</b><div>${desc}</div></div>`;
-function navigate(view){activeView=view;focusAgent=null;render();document.querySelector('#mainContent').scrollTo({top:0});if(view==='forum')loadForum()}
+function navigate(view){
+ if(activeView==='settings'&&integrationTab==='ai'&&integrationDirty&&!confirm('Cấu hình AI có thay đổi chưa lưu. Rời trang và bỏ các thay đổi?'))return;
+ integrationDirty=false;activeView=view;focusAgent=null;render();
+ document.querySelector('#mainContent').scrollTo({top:0});if(view==='forum')loadForum()
+ }
 function pageHead(eyebrow,title,desc,right=''){return `<div class="page-head"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${desc}</p></div><div class="view-actions">${right}</div></div>`}
 function svgText(str,x,y,size=12,color='#f2fff6',weight=700){return `<text x="${x}" y="${y}" fill="${color}" font-size="${size}" font-family="Arial, sans-serif" font-weight="${weight}" text-anchor="middle">${h(str)}</text>`}
 function svgRoom(a,x,y){
@@ -289,8 +293,8 @@ function aiSettingsSection(){
  <button type="button" class="small-btn" onclick="preferBalancedPreset()">Claude CEO/Strategy/Compliance</button></div>
  </details>
  <div class="integration-savebar">
- <div><strong id="aiUnsavedIndicator">Cấu hình đã tải</strong><small>Thay đổi chỉ có hiệu lực sau khi lưu.</small></div>
- <button type="submit" class="primary-btn">Lưu cấu hình AI</button>
+ <div><strong id="aiUnsavedIndicator">Cấu hình đã tải</strong><small>Thay đổi chỉ có hiệu lực sau khi lưu.</small><span id="aiSaveFeedback" class="integration-save-feedback" role="status" aria-live="polite" hidden></span></div>
+ <button id="saveAISettingsButton" type="submit" class="primary-btn">Lưu cấu hình AI</button>
  </div>
  </form> </section>`;
 }
@@ -323,6 +327,7 @@ function preferFreePreset(){
  form.elements['free_only'].checked=true;
  form.elements['allow_paid_fallback'].checked=false;
  updateFreeOnlyControls();
+ markIntegrationDirty();
  toast('Đã chọn Gemini → Groq → Ollama, chặn Claude/OpenAI trả phí. Bấm Lưu để áp dụng.');
 }
 function preferClaudePreset(){
@@ -332,6 +337,7 @@ function preferClaudePreset(){
    form.elements['provider_'+a].value='claude';
    form.elements['claude_model_'+a].value=['creative','analyst'].includes(a)?'claude-haiku-4-5':'claude-sonnet-4-6';
  }
+ markIntegrationDirty();
  toast('Đã chọn Claude cho các agent. Bấm Lưu cấu hình AI để áp dụng.');
 }
 function preferBalancedPreset(){
@@ -342,6 +348,7 @@ function preferBalancedPreset(){
    form.elements['provider_'+a].value=use?'claude':'ollama';
    form.elements['claude_model_'+a].value='claude-sonnet-4-6';
  }
+ markIntegrationDirty();
  toast('Đã chọn Claude cho CEO/Strategy/Compliance. Bấm Lưu để áp dụng.');
 }
 function telegramSettingsSection(){
@@ -410,8 +417,18 @@ async function saveAISettings(event){
   claude_models:Object.fromEntries(roles.map(a=>[a,e.get('claude_model_'+a)])),
   openai_models:Object.fromEntries(roles.map(a=>[a,e.get('openai_model_'+a)]))
  };
- try{const r=await api('settings/ai',payload);integrationDirty=false;toast(r.message||'Đã lưu cấu hình AI');await refresh()}
- catch(err){toast('Lưu cấu hình AI: '+err.message,true)}
+ const button=$('#saveAISettingsButton'),feedback=$('#aiSaveFeedback');
+ if(button){button.disabled=true;button.textContent='Đang lưu...';}
+ if(feedback){feedback.hidden=false;feedback.textContent='Đang lưu cấu hình an toàn trên máy...';}
+ try{
+  const r=await api('settings/ai',payload);
+  integrationDirty=false;
+  if(feedback)feedback.textContent='✓ Đã lưu thành công';
+  toast(r.message||'Đã lưu cấu hình AI');await refresh();
+ }catch(err){
+  if(feedback)feedback.textContent='✕ Không thể lưu: '+err.message;
+  toast('Lưu cấu hình AI: '+err.message,true);
+ }finally{if(button){button.disabled=false;button.textContent='Lưu cấu hình AI';}}
 }
 async function saveTelegramSettings(event){
  event.preventDefault();
