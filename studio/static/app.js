@@ -277,8 +277,12 @@ function updateFreeOnlyControls(){
 }
 function preferFreePreset(){
  const form=$('#aiSettingsForm');if(!form)return;
- for(const a of ['ceo','strategy','compliance','research','creative','analyst'])
+ for(const a of ['ceo','strategy','compliance','research','creative','analyst']){
    form.elements['provider_'+a].value='auto';
+   const light=['creative','analyst'].includes(a);
+   form.elements['gemini_model_'+a].value=light?'gemini-3.5-flash-lite':'gemini-3.8-flash';
+   form.elements['groq_model_'+a].value=light?'openai/gpt-oss-20b':'openai/gpt-oss-120b';
+ }
  form.elements['free_only'].checked=true;
  form.elements['allow_paid_fallback'].checked=false;
  updateFreeOnlyControls();
