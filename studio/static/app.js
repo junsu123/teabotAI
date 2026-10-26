@@ -3,7 +3,7 @@ const h = x => String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':
 const $ = s => document.querySelector(s);
 let data={agents:[],accounts:[],jobs:[],missions:[],learnings:[],products:{},proxies:[],training:[],stats:{}}, activeView='hq', focusAgent=null, sceneScale=1, sceneMode='mars';
 let forumMissionId=0,forumData=null,forumBusy=false;
-const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt ChatGPT & Telegram',dom:'Học đăng bài'};
+const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt AI & Telegram',dom:'Học đăng bài'};
 async function api(endpoint, body=null){
  const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:endpoint.endsWith('/test')?20000:12000);
  const opts=body===null?{signal:ctrl.signal}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal};
@@ -202,7 +202,7 @@ function aiSettingsSection(){
  return `<section class="panel padded" style="min-width:0">
  <h3>✦ Chế độ API miễn phí – Gemini chính, Groq phụ</h3>
  <p class="tagline">Thiết lập trực tiếp: Gemini là AI chính, Groq dự phòng. Claude, OpenAI và Ollama vẫn có thể chọn. Chỉ AI CEO quyết định cuối.</p>
- <form id="aiSettingsForm" onsubmit="saveAISettings(event)">
+ <form id="aiSettingsForm" class="integration-form" onsubmit="saveAISettings(event)" oninput="markIntegrationDirty()" onchange="markIntegrationDirty()">
  <label class="checkbox-line" style="margin:14px 0;padding:12px;border:1px solid #315062;border-radius:10px">
  <input type="checkbox" name="free_only" onchange="updateFreeOnlyControls()" ${cfg.free_only!==false?'checked':''}>
  <strong>Chỉ sử dụng model có gói API miễn phí (khuyên dùng)</strong></label>
@@ -333,9 +333,20 @@ function telegramSettingsSection(){
  <div class="tagline">Để tạo Bot: vào Telegram → tìm <strong>@BotFather</strong> → gửi /newbot. Bạn cần biết User ID dạng số của tài khoản được phép sử dụng.</div>
  </section>`;
 }
-function settingsView(){return `${pageHead('⚙ LOCAL INTEGRATIONS','Cài đặt <span class="gradient-text">Gemini / Groq / AI & Telegram</span>',
- 'Cấu hình trực tiếp tại đây – không sửa file .env và không chạy lệnh cấu hình.', '')}
- <div class="two-cols">${aiSettingsSection()}${telegramSettingsSection()}</div>`;}
+let integrationTab='ai',integrationDirty=false;
+function markIntegrationDirty(){integrationDirty=true;const e=$('#aiUnsavedIndicator');if(e)e.textContent='● Có thay đổi chưa lưu';}
+function settingsTabSwitch(tab){
+ if(tab===integrationTab)return;
+ if(integrationDirty&&!confirm('Thiết lập AI chưa được lưu. Rời trang này và bỏ các thay đổi?'))return;
+ integrationDirty=false;integrationTab=tab;render();
+}
+function settingsView(){return `${pageHead('⚙ LOCAL INTEGRATIONS','Cài đặt <span class="gradient-text">AI & Telegram</span>',
+ 'Cài trực tiếp trên phần mềm · Không cần sửa file .env', '')}
+ <div class="integration-tabs" role="tablist" aria-label="Nhóm cấu hình">
+ <button type="button" role="tab" aria-selected="${integrationTab==='ai'}" class="${integrationTab==='ai'?'active':''}" onclick="settingsTabSwitch('ai')">✦ Gemini & các AI</button>
+ <button type="button" role="tab" aria-selected="${integrationTab==='telegram'}" class="${integrationTab==='telegram'?'active':''}" onclick="settingsTabSwitch('telegram')">➤ Telegram Bot</button></div>
+ ${integrationTab==='ai'?aiSettingsSection():`<div class="integration-telegram">${telegramSettingsSection()}</div>`}
+ `;}
 function telegramView(){return `${pageHead('➤ TELEGRAM CONNECTOR','Telegram <span class="gradient-text">Bot</span>',
  'Thiết lập và vận hành bot nhận ảnh ngay trong phần mềm.',eButton('⚙ Cài đặt cả ChatGPT','onclick="navigate(\'settings\')"'))}
  <div class="two-cols">${telegramSettingsSection()}
@@ -362,7 +373,7 @@ async function saveAISettings(event){
   claude_models:Object.fromEntries(roles.map(a=>[a,e.get('claude_model_'+a)])),
   openai_models:Object.fromEntries(roles.map(a=>[a,e.get('openai_model_'+a)]))
  };
- try{const r=await api('settings/ai',payload);toast(r.message||'Đã lưu cấu hình AI');await refresh()}
+ try{const r=await api('settings/ai',payload);integrationDirty=false;toast(r.message||'Đã lưu cấu hình AI');await refresh()}
  catch(err){toast('Lưu cấu hình AI: '+err.message,true)}
 }
 async function saveTelegramSettings(event){
