@@ -495,7 +495,7 @@ async function saveTelegramSettings(event){
 }
 async function removeIntegrationSecret(provider){
  const label=provider==='gemini'?'Gemini API key':provider==='groq'?'Groq API key':provider==='claude'?'Claude API key':provider==='openai'?'OpenAI API key':'Telegram Bot Token';
- if(!confirm('Xóa '+label+' khỏi kho mật khẩu Windows?'))return;
+ if(!confirm('Xóa '+label+' khỏi database SQLite mã hóa trên máy?'))return;
  try{const route=provider==='gemini'?'gemini/remove-key':provider==='groq'?'groq/remove-key':provider==='claude'?'claude/remove-key':provider==='openai'?'openai/remove-key':'telegram/remove-token';
  const r=await api('settings/'+route,{confirm:true});
  toast(r.message||'Đã xóa khóa đã lưu');await refresh();}
