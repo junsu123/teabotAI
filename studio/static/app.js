@@ -200,9 +200,13 @@ function aiSettingsSection(){
       claudeModels=cfg.claude_models||{},openaiModels=cfg.openai_models||{};
  const roles=['ceo','strategy','compliance','research','creative','analyst'];
  return `<section class="panel padded" style="min-width:0">
- <h3>✦ Ưu tiên Gemini API → Groq dự phòng</h3>
+ <h3>✦ Chế độ API miễn phí – Gemini chính, Groq phụ</h3>
  <p class="tagline">Thiết lập trực tiếp: Gemini là AI chính, Groq dự phòng. Claude, OpenAI và Ollama vẫn có thể chọn. Chỉ AI CEO quyết định cuối.</p>
  <form id="aiSettingsForm" onsubmit="saveAISettings(event)">
+ <label class="checkbox-line" style="margin:14px 0;padding:12px;border:1px solid #315062;border-radius:10px">
+ <input type="checkbox" name="free_only" onchange="updateFreeOnlyControls()" ${cfg.free_only!==false?'checked':''}>
+ <strong>Chỉ sử dụng model có gói API miễn phí (khuyên dùng)</strong></label>
+ <div class="note">Gemini Free Tier và Groq Free Plan tùy tài khoản, hạn mức và trạng thái thanh toán. Tùy chọn này chặn Claude/OpenAI, nhưng không bảo đảm tài khoản Gemini/Groq đã bật billing sẽ không phát sinh phí.</div>
  <div class="field"><label>Gemini API Key (Google AI Studio) – ƯU TIÊN CHÍNH</label>
  <input name="gemini_api_key" type="password" autocomplete="new-password" placeholder="${cfg.gemini_key_configured?'Đã lưu Gemini key – để trống để giữ nguyên':'Dán Gemini API key tại đây'}"></div>
  <div class="field"><label>Groq API Key – DỰ PHÒNG</label>
@@ -216,7 +220,7 @@ function aiSettingsSection(){
  Bấm Kiểm tra Groq để xác minh ngay cả khi chưa lưu key. Nếu thành công, hãy bấm Lưu cấu hình AI để sử dụng khóa.</div>
  <div class="note">Thứ tự ưu tiên: <strong>Gemini → Groq → Claude → OpenAI → Ollama</strong>.
  Trong chế độ TỰ ĐỘNG, Claude và OpenAI chỉ được thử nếu bạn cho phép API trả phí. Không có giới hạn đảm bảo miễn phí: quota tùy tài khoản Google/Groq.</div>
- <label class="checkbox-line"><input type="checkbox" name="allow_paid_fallback" ${cfg.allow_paid_fallback?'checked':''}>
+ <label class="checkbox-line"><input type="checkbox" name="allow_paid_fallback" ${cfg.allow_paid_fallback?'checked':''} ${cfg.free_only!==false?'disabled':''}>
  Cho phép tự chuyển sang Claude/OpenAI trả phí khi Gemini/Groq tạm gián đoạn</label>
  <div class="field"><label>Claude API Key (Anthropic)</label>
  <input type="password" name="claude_api_key" autocomplete="new-password" placeholder="${cfg.claude_key_configured?'Đã lưu khóa Claude – để trống nếu không thay đổi':'Nhập Claude API key tại đây'}">
@@ -228,7 +232,7 @@ function aiSettingsSection(){
  <small>${cfg.openai_key_configured?'✓ Đã lưu OpenAI key':'Chưa lưu OpenAI key'}</small></div>
  <div class="field"><label>Ngân sách OpenAI tháng (USD)</label>
  <input name="monthly_limit_usd" type="number" min="0.5" max="1000" step="0.5" value="${Number(cfg.monthly_limit_usd||12)}"></div>
- <div class="note">Khuyên dùng chế độ TỰ ĐỘNG để ưu tiên Gemini Flash, dự phòng Groq GPT-OSS; Ollama là phương án cuối khi không cho phép API trả phí.</div>
+ <div class="note">Model Free Tier mặc định: Gemini 3.8 Flash cho CEO/Strategy/Research/Compliance, Gemini 3.5 Flash-Lite cho Creative/Analyst; Groq GPT-OSS 120B và 20B. Claude/OpenAI là API trả phí, không thuộc chế độ miễn phí.</div>
  <div class="form-bottom" style="margin:10px 0"><button type="button" class="small-btn" onclick="preferFreePreset()">✦ Áp dụng Gemini → Groq cho tất cả agent</button><button type="button" class="small-btn" onclick="preferClaudePreset()">✦ Ưu tiên Claude cho tất cả agent</button>
  <button type="button" class="small-btn" onclick="preferBalancedPreset()">◉ Claude CEO & chiến lược, Ollama việc nhẹ</button></div>
  <div class="table-wrap"><table class="data-table"><thead><tr><th>Vị trí</th><th>Nhà cung cấp</th><th>Model Gemini</th><th>Model Groq</th><th>Model Claude</th><th>Model OpenAI</th></tr></thead>
@@ -236,9 +240,9 @@ function aiSettingsSection(){
  const provider=providers[a]||'auto';
  return `<tr><td><strong>${agentName[a]}</strong></td>
  <td><select name="provider_${a}">
- ${[['auto','Tự động: Gemini → Groq → phụ'],['gemini','Gemini API'],['groq','Groq API'],['claude','Claude API'],['openai','OpenAI API'],['ollama','Ollama cục bộ']].map(p=>`<option value="${p[0]}" ${p[0]===provider?'selected':''}>${p[1]}</option>`).join('')}
+ ${[['auto','Tự động: Gemini → Groq → Ollama'],['gemini','Gemini (có Free Tier)'],['groq','Groq (có Free Plan)'],['claude','Claude (trả phí)'],['openai','OpenAI (trả phí)'],['ollama','Ollama cục bộ']].map(p=>`<option value="${p[0]}" ${p[0]===provider?'selected':''} ${cfg.free_only!==false&&['claude','openai'].includes(p[0])?'disabled':''}>${p[1]}</option>`).join('')}
  </select></td>
- <td><select name="gemini_model_${a}">${['gemini-3.8-flash','gemini-3.5-flash-lite'].map(m=>`<option value="${m}" ${m===(cfg.gemini_models?.[a]||(a==='creative'||a==='analyst'?'gemini-3.5-flash-lite':'gemini-3.8-flash'))?'selected':''}>${m}</option>`).join('')}</select></td>
+ <td><select name="gemini_model_${a}">${['gemini-3.8-flash','gemini-3.6-flash','gemini-3.5-flash-lite','gemini-3.1-flash-lite','gemini-2.5-flash','gemini-2.5-flash-lite'].map(m=>`<option value="${m}" ${m===(cfg.gemini_models?.[a]||(a==='creative'||a==='analyst'?'gemini-3.5-flash-lite':'gemini-3.8-flash'))?'selected':''}>${m}</option>`).join('')}</select></td>
  <td><select name="groq_model_${a}">${['openai/gpt-oss-120b','openai/gpt-oss-20b','qwen/qwen3.8-27b'].map(m=>`<option value="${m}" ${m===(cfg.groq_models?.[a]||(a==='creative'||a==='analyst'?'openai/gpt-oss-20b':'openai/gpt-oss-120b'))?'selected':''}>${m}</option>`).join('')}</select></td>
  <td><select name="claude_model_${a}">
  ${['claude-sonnet-4-6','claude-opus-4-6','claude-haiku-4-5'].map(m=>`<option value="${m}" ${m===(claudeModels[a]||'claude-sonnet-4-6')?'selected':''}>${m}</option>`).join('')}
@@ -258,15 +262,31 @@ function aiSettingsSection(){
  Chỉ thay đổi lựa chọn mô hình cho lượt gọi AI tiếp theo, không ảnh hưởng phiên đang xử lý.</div>
  </section>`;
 }
+function updateFreeOnlyControls(){
+ const form=$('#aiSettingsForm');if(!form)return;
+ const enabled=form.elements['free_only'].checked;
+ const fallback=form.elements['allow_paid_fallback'];
+ if(enabled){fallback.checked=false;fallback.disabled=true;}else{fallback.disabled=false;}
+ for(const role of ['ceo','strategy','compliance','research','creative','analyst']){
+  const field=form.elements['provider_'+role];
+  for(const option of field.options){
+   if(['claude','openai'].includes(option.value))option.disabled=enabled;
+  }
+  if(enabled&&['claude','openai'].includes(field.value))field.value='auto';
+ }
+}
 function preferFreePreset(){
  const form=$('#aiSettingsForm');if(!form)return;
  for(const a of ['ceo','strategy','compliance','research','creative','analyst'])
    form.elements['provider_'+a].value='auto';
+ form.elements['free_only'].checked=true;
  form.elements['allow_paid_fallback'].checked=false;
- toast('Đã chọn Gemini → Groq → Ollama, không tự dùng Claude/OpenAI trả phí. Bấm Lưu để áp dụng.');
+ updateFreeOnlyControls();
+ toast('Đã chọn Gemini → Groq → Ollama, chặn Claude/OpenAI trả phí. Bấm Lưu để áp dụng.');
 }
 function preferClaudePreset(){
  const form=$('#aiSettingsForm');if(!form)return;
+ if(form.elements['free_only'].checked){toast('Hãy tắt Chỉ sử dụng model có gói miễn phí trước khi chọn Claude.',true);return;}
  for(const a of ['ceo','strategy','compliance','research','creative','analyst']){
    form.elements['provider_'+a].value='claude';
    form.elements['claude_model_'+a].value=['creative','analyst'].includes(a)?'claude-haiku-4-5':'claude-sonnet-4-6';
@@ -275,6 +295,7 @@ function preferClaudePreset(){
 }
 function preferBalancedPreset(){
  const form=$('#aiSettingsForm');if(!form)return;
+ if(form.elements['free_only'].checked){toast('Hãy tắt Chỉ sử dụng model có gói miễn phí trước khi chọn Claude.',true);return;}
  for(const a of ['ceo','strategy','compliance','research','creative','analyst']){
    const use=['ceo','strategy','compliance'].includes(a);
    form.elements['provider_'+a].value=use?'claude':'ollama';
@@ -326,6 +347,7 @@ async function saveAISettings(event){
  const payload={
   gemini_api_key:e.get('gemini_api_key')||'',groq_api_key:e.get('groq_api_key')||'',
   claude_api_key:e.get('claude_api_key')||'',openai_api_key:e.get('openai_api_key')||'',
+  free_only:e.get('free_only')==='on',
   allow_paid_fallback:e.get('allow_paid_fallback')==='on',
   provider_priority:['gemini','groq','claude','openai','ollama'],
   claude_monthly_limit_usd:Number(e.get('claude_monthly_limit_usd')),
