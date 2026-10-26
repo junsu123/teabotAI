@@ -67,7 +67,7 @@ class GroqSdkTests(unittest.TestCase):
         result2=cloud.test_groq_chat(key)
         self.assertTrue(result2["ok"])
         self.assertEqual(self.calls[-1][0],"chat")
-        self.assertEqual(self.calls[-1][1]["model"],"openai/gpt-oss-20b")
+        self.assertEqual(self.calls[-1][1]["model"],"openai/gpt-oss-120b")
         self.assertEqual(self.closed,2)
 
     def test_sdk_saved_agent_uses_exact_selected_model(self):
