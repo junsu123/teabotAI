@@ -5,7 +5,7 @@ let data={agents:[],accounts:[],jobs:[],missions:[],learnings:[],products:{},pro
 let forumMissionId=0,forumData=null,forumBusy=false;
 const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt AI & Telegram',dom:'Học đăng bài'};
 async function api(endpoint, body=null){
- const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:endpoint.endsWith('/test')?20000:12000);
+ const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:endpoint.endsWith('/test-chat')?30000:endpoint.endsWith('/test')?20000:12000);
  const opts=body===null?{signal:ctrl.signal}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal};
  try{
   const response=await fetch('/api/'+endpoint,opts);
@@ -236,7 +236,9 @@ function aiSettingsSection(){
  <div class="integration-key-helper">${cfg.groq_key_configured?'Khóa đang nằm trong kho mật khẩu Windows.':'Có thể kiểm tra trước khi lưu khóa.'}
  <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Lấy API key</a></div>
  <div class="integration-key-actions"><button type="button" class="small-btn" onclick="testConnection('groq')">✓ Kiểm tra Groq</button>
+ <button type="button" class="small-btn" onclick="testGroqChat()">Thử trực tiếp GPT-OSS-20B</button>
  ${cfg.groq_key_configured?'<button type="button" class="integration-danger" onclick="removeIntegrationSecret(\'groq\')">Xóa khóa</button>':''}</div>
+ <p class="integration-key-helper">Nếu kiểm tra danh sách model bị HTTP 403, bấm thử GPT-OSS-20B để xác định API tạo văn bản có hoạt động không. Phép thử này tiêu thụ một ít token và cần xác nhận của bạn.</p>
  <div id="groqConnectionResult" class="integration-feedback" role="status" aria-live="polite" hidden></div>
  </article></div> <div class="integration-section-title"><span>BƯỚC 2</span><div><h3>Chọn chế độ vận hành</h3><p>Ưu tiên miễn phí, không tự gọi Claude/OpenAI tính phí.</p></div></div>
  <section class="integration-settings-area">
@@ -465,6 +467,21 @@ async function testConnection(target){
  }catch(e){
   if(el){el.hidden=false;el.classList.add('error');el.textContent='✕ '+e.message;}
   toast('Kiểm tra '+target+' thất bại: '+e.message,true);
+ }
+}
+async function testGroqChat(){
+ if(!confirm('Thử gọi trực tiếp Groq GPT-OSS-20B bằng một câu rất ngắn? Phép thử tiêu thụ một ít token/quota API và có thể phát sinh phí nếu tài khoản Groq đang dùng gói trả phí.'))return;
+ const el=$('#groqConnectionResult');
+ const typed=$('#aiSettingsForm input[name="groq_api_key"]')?.value?.trim()||'';
+ if(el){el.hidden=false;el.classList.remove('error');el.textContent='Đang thử tạo câu trả lời bằng GPT-OSS-20B...';}
+ try{
+  const result=await api('settings/groq/test-chat',{api_key:typed,confirm_token_use:true});
+  const message='✓ '+(result.message||'Đã gọi Groq thành công')+
+     (result.sample?' Phản hồi: '+result.sample:'');
+  if(el)el.textContent=message;else toast(message);
+ }catch(err){
+  if(el){el.hidden=false;el.classList.add('error');el.textContent='✕ '+err.message;}
+  toast('Thử GPT-OSS-20B thất bại: '+err.message,true);
  }
 }
 async function controlTelegram(action){
