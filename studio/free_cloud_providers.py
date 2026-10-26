@@ -267,12 +267,13 @@ def test_groq_chat(key,transport=None):
     key=key.strip()
     if key.startswith("xai-"):
         raise ValueError("Đây có vẻ là khóa Grok của xAI, không phải GroqCloud.")
-    model="openai/gpt-oss-20b"
+    # Match the minimal user-verified Python SDK call exactly, without
+    # a system prompt, custom temperature or reasoning parameters.
+    model="openai/gpt-oss-120b"
     payload={
         "model":model,
-        "messages":[{"role":"user","content":"Chỉ trả lời đúng một từ: OK"}],
-        "max_completion_tokens":160,
-        "temperature":0,
+        "messages":[{"role":"user","content":"Reply with exactly: GROQ API OK"}],
+        "max_completion_tokens":100,
     }
     request=Request(GROQ_ENDPOINT,method="POST",
         data=json.dumps(payload,ensure_ascii=False).encode("utf-8"),
@@ -286,7 +287,7 @@ def test_groq_chat(key,transport=None):
     answer=message.get("content") if isinstance(message,dict) else None
     snippet=(answer[:100] if isinstance(answer,str) else "")
     return {"ok":True,"model":model,"sample":snippet,
-            "message":"Groq Chat Completions hoạt động: đã gọi thành công GPT-OSS-20B. "
+            "message":"Groq SDK đã gọi thành công GPT-OSS-120B theo cấu hình mã Python mẫu. "
                       "Phép thử có tiêu thụ một ít token/quota."}
 
 
