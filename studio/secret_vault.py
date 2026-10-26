@@ -22,8 +22,7 @@ def _master(keyring, service):
     # A legacy Windows keyring is still used *only* for the encryption key.
     key=keyring.get_password(service,MASTER_KEY_NAME)
     if not key:
-        key=Fernet.generate_key().decode("ascii")
-        keyring.set_password(service,MASTER_KEY_NAME,key)
+        raise RuntimeError("Không tìm thấy khóa mã hóa database trong Windows Credential Manager. Không thể giải mã các API key đã lưu.")
     try:
         return Fernet(key.encode("ascii"))
     except (ValueError,TypeError) as error:
@@ -61,6 +60,14 @@ def read_secret(settings_path,keyring,service,name):
 
 
 def save_secret(settings_path,keyring,service,name,secret):
+    existing=keyring.get_password(service,MASTER_KEY_NAME)
+    if not existing:
+        # Never silently regenerate a missing encryption key for an existing DB.
+        with _connect(_db_path(settings_path)) as con:
+            has_rows=con.execute("SELECT 1 FROM integration_secrets LIMIT 1").fetchone()
+        if has_rows:
+            raise RuntimeError("Database đã có khóa nhưng Windows mất khóa mã hóa chính. Không tạo khóa mới để tránh mất dữ liệu.")
+        keyring.set_password(service,MASTER_KEY_NAME,Fernet.generate_key().decode("ascii"))
     ciphertext=_master(keyring,service).encrypt(secret.encode("utf-8"))
     with _connect(_db_path(settings_path)) as con:
         con.execute("""INSERT INTO integration_secrets(name,ciphertext)
