@@ -131,17 +131,25 @@ def training_detail(session_id):
  ev=TRAIN_DIR/(session_id+'.events.jsonl')
  return {'steps':[json.loads(x) for x in ev.read_text(encoding='utf-8').splitlines() if x.strip()][:250] if ev.exists() else [], 'fields':[]}
 
+# Do not hit Ollama on every dashboard refresh (can make low-spec PCs seem frozen).
+_ollama_cache = {'until': 0.0, 'data': None}
 def ollama_health():
+ global _ollama_cache
+ now_mono = time.monotonic()
+ if now_mono < _ollama_cache['until'] and _ollama_cache['data'] is not None:
+  return _ollama_cache['data']
  model=os.environ.get('OLLAMA_MODEL','qwen3:4b')
  try:
   model=legacy_ai.config().get('model',model)
   opener=build_opener(ProxyHandler({}))
-  with opener.open('http://127.0.0.1:11434/api/tags',timeout=1.5) as resp:
+  with opener.open('http://127.0.0.1:11434/api/tags',timeout=0.8) as resp:
    result=json.loads(resp.read(400000).decode('utf-8'))
   available=[str(x.get('name','')) for x in result.get('models',[])]
-  return {'running':True,'model':model,'model_ready':model in available,'models':available[:30]}
+  outcome={'running':True,'model':model,'model_ready':model in available,'models':available[:30]}
  except Exception as exc:
-  return {'running':False,'model':model,'model_ready':False,'error':str(exc)[:250]}
+  outcome={'running':False,'model':model,'model_ready':False,'error':str(exc)[:250]}
+ _ollama_cache={'until':now_mono+20.0,'data':outcome}
+ return outcome
 
 def overview():
  shops=list_accounts(); jobs=list_jobs(); ms=list_missions()
@@ -366,9 +374,10 @@ def main():
  stop_event=threading.Event()
  worker=threading.Thread(target=ceo_engine.worker_loop,
      args=(DB,legacy_ai.chat,list_products,stop_event),daemon=True,name='AI-CEO-Worker')
- worker.start()
  url=f'http://127.0.0.1:{args.port}'
  server=ThreadingHTTPServer(('127.0.0.1',args.port),Handler)
+ # Bring up the dashboard before CPU-heavy local model inference begins.
+ threading.Timer(3.0,worker.start).start()
  print(f'TEA AI MARS STUDIO: {url}\nDữ liệu nội bộ: {DB}\nNhấn Ctrl+C để dừng.')
  if not args.no_browser:threading.Timer(0.6,lambda:webbrowser.open(url)).start()
  try:server.serve_forever()
