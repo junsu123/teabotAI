@@ -39,7 +39,7 @@ class SetupTests(unittest.TestCase):
         self.assertNotIn(token,json.dumps(status))
         self.assertEqual(settings.openai_env({})["OPENAI_API_KEY"],token)
         self.assertEqual(model_router.provider_for("ceo",settings.openai_env({})),"openai")
-        self.assertEqual(model_router.provider_for("creative",settings.openai_env({})),"ollama")
+        self.assertEqual(model_router.provider_for("creative",settings.openai_env({})),"auto")
 
     def test_telegram_token_only_in_keyring_and_testable(self):
         token="0000000000:FAKE_TEST_TOKEN_FOR_LOCAL_CHECK"
@@ -98,7 +98,7 @@ class SetupTests(unittest.TestCase):
                                  "OPENAI_API_KEY":"legacy-test-key-not-real"})
         self.assertEqual(env["TEA_OPENAI_AGENTS"],"")
         self.assertEqual(env["OPENAI_API_KEY"],"")
-        self.assertEqual(model_router.provider_for("ceo",env),"ollama")
+        self.assertEqual(model_router.provider_for("ceo",env),"auto")
 
 if __name__=="__main__":
     unittest.main()
