@@ -33,7 +33,7 @@ DEFAULT={"openai_agents":[],"openai_models":DEFAULT_MODELS,"monthly_limit_usd":1
          "telegram_allowed_ids":[],"telegram_autostart":False,
          "agent_providers":{a:"auto" for a in VALID_AGENTS},
          "provider_priority":["gemini","groq","claude","openai","ollama"],
-         "allow_paid_fallback":False,
+         "allow_paid_fallback":False,"free_only":True,
          "gemini_models":GEMINI_DEFAULT,"groq_models":GROQ_DEFAULT,
          "claude_models":CLAUDE_MODELS,"claude_monthly_limit_usd":12.0}
 
@@ -95,7 +95,7 @@ def read():
                 for field in ("openai_agents","openai_models","monthly_limit_usd",
                               "telegram_allowed_ids","telegram_autostart","agent_providers",
                               "claude_models","claude_monthly_limit_usd",
-                              "gemini_models","groq_models","provider_priority","allow_paid_fallback"):
+                              "gemini_models","groq_models","provider_priority","allow_paid_fallback","free_only"):
                     if field in saved:config[field]=saved[field]
         except (OSError,ValueError):
             raise RuntimeError("Không đọc được cấu hình tích hợp; cần kiểm tra tệp integrations.local.json.")
@@ -184,6 +184,7 @@ def status():
         "groq_models":d["groq_models"],
         "provider_priority":d["provider_priority"],
         "allow_paid_fallback":d["allow_paid_fallback"],
+        "free_only":d["free_only"],
         "monthly_limit_usd":d["monthly_limit_usd"],
         "openai_key_configured":has_secret(OPENAI_SECRET),
         "telegram_token_configured":has_secret(TELEGRAM_SECRET),
@@ -207,6 +208,7 @@ def openai_env(base=None):
     env["GEMINI_API_KEY"]=_get(GEMINI_SECRET)
     env["GROQ_API_KEY"]=_get(GROQ_SECRET)
     env["TEA_ALLOW_PAID_FALLBACK"]="1" if d["allow_paid_fallback"] else "0"
+    env["TEA_FREE_ONLY"]="1" if d["free_only"] else "0"
     env["TEA_PROVIDER_PRIORITY"]=",".join(d["provider_priority"])
     env["TEA_CLAUDE_MONTHLY_LIMIT_USD"]=str(d["claude_monthly_limit_usd"])
     for agent in VALID_AGENTS:
@@ -279,6 +281,11 @@ def save_ai_providers(body):
     allow_paid=body.get("allow_paid_fallback",False)
     if type(allow_paid) is not bool:
         raise ValueError("Chế độ dự phòng trả phí phải là đúng/sai")
+    free_only=body.get("free_only",True)
+    if type(free_only) is not bool:
+        raise ValueError("Chế độ chỉ model có gói miễn phí phải là đúng/sai")
+    if free_only and (allow_paid or any(providers.get(a,"auto") in ("claude","openai") for a in VALID_AGENTS)):
+        raise ValueError("Đang chọn CHỈ MODEL CÓ GÓI MIỄN PHÍ; không thể dùng Claude/OpenAI API trả phí. Hãy bỏ chế độ này nếu thật sự muốn dùng trả phí.")
     selected_openai={a:o_models.get(a,DEFAULT_MODELS[a]) for a in VALID_AGENTS}
     selected_claude={a:c_models.get(a,CLAUDE_MODELS[a]) for a in VALID_AGENTS}
     if any(v not in VALID_MODELS for v in selected_openai.values()):
@@ -308,7 +315,7 @@ def save_ai_providers(body):
     d.update(agent_providers=final,openai_agents=[a for a in VALID_AGENTS if final[a]=="openai"],
              openai_models=selected_openai,claude_models=selected_claude,
              gemini_models=selected_gemini,groq_models=selected_groq,
-             provider_priority=priority,allow_paid_fallback=allow_paid,
+             provider_priority=priority,allow_paid_fallback=allow_paid,free_only=free_only,
              monthly_limit_usd=openai_limit,claude_monthly_limit_usd=claude_limit)
     _write(d)
     return status()
