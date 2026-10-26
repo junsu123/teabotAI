@@ -36,7 +36,7 @@ class ClaudeIntegrationTests(unittest.TestCase):
 
     def test_prefer_claude_routes_ceo_not_to_ollama(self):
         key="sk-ant-test-NOT-REAL"
-        cfg=settings.save_ai_providers({
+        cfg=settings.save_ai_providers({"free_only":False,
             "claude_api_key":key,
             "agent_providers":{"ceo":"claude","strategy":"claude","compliance":"claude"},
             "claude_models":{"ceo":"claude-sonnet-4-6"},
@@ -55,7 +55,7 @@ class ClaudeIntegrationTests(unittest.TestCase):
         self.assertNotIn(key,json.dumps(cfg))
 
     def test_claude_actual_request_shape_and_vietnamese(self):
-        settings.save_ai_providers({
+        settings.save_ai_providers({"free_only":False,
             "claude_api_key":"sk-ant-test-fake",
             "agent_providers":{"ceo":"claude"},
             "claude_monthly_limit_usd":5,
@@ -77,7 +77,7 @@ class ClaudeIntegrationTests(unittest.TestCase):
         self.assertEqual(claude.usage_month(self.usage.with_name("claude_usage.sqlite3"))["calls"],1)
 
     def test_claude_key_verification_without_generation(self):
-        settings.save_ai_providers({"claude_api_key":"sk-ant-mock",
+        settings.save_ai_providers({"free_only":False,"claude_api_key":"sk-ant-mock",
             "agent_providers":{"ceo":"claude"}})
         def test_transport(req):
             self.assertTrue(req.full_url.endswith("/v1/models?limit=100"))
@@ -89,13 +89,13 @@ class ClaudeIntegrationTests(unittest.TestCase):
 
     def test_missing_key_no_silent_fallback(self):
         with self.assertRaisesRegex(ValueError,"Claude"):
-            settings.save_ai_providers({"agent_providers":{"ceo":"claude"}})
+            settings.save_ai_providers({"free_only":False,"agent_providers":{"ceo":"claude"}})
         with self.assertRaisesRegex(RuntimeError,"Claude API key"):
             router.chat("ceo","hi",lambda a,p:"fallback",self.usage,
                 env={"TEA_AGENT_PROVIDER_CEO":"claude"},transport=lambda r: self.fail("network"))
 
     def test_limit_and_key_removal(self):
-        settings.save_ai_providers({"claude_api_key":"sk-ant-fake",
+        settings.save_ai_providers({"free_only":False,"claude_api_key":"sk-ant-fake",
             "agent_providers":{"ceo":"claude"},"claude_monthly_limit_usd":0.000001})
         with self.assertRaisesRegex(RuntimeError,"chi phí"):
             router.chat("ceo","test",lambda a,p:"fallback",self.usage,
