@@ -30,6 +30,7 @@ import proxy_store
 import ceo_engine
 import agent_forum
 import model_router
+import claude_provider
 import integration_settings
 import telegram_manager
 import main as legacy_ai
@@ -176,6 +177,7 @@ def overview():
     'connection_settings':integration_settings.status(),
     'telegram_process':telegram_manager.status(),
     'openai_usage':model_router.usage_month(DATA/'openai_usage.sqlite3'),
+    'claude_usage':claude_provider.usage_month(DATA/'claude_usage.sqlite3'),
     'stats':{'agents':len(AGENTS),'shops':len(shops),'jobs_open':sum(x['status'] not in ('posted','rejected','failed') for x in jobs),
              'missions_open':sum(x['status']!='done' for x in ms),'lessons':len(list_learnings())},
     'integration':{'ollama_url':'http://localhost:11434','telegram':'Cần cấu hình token ở máy',
@@ -219,7 +221,8 @@ class Handler(BaseHTTPRequestHandler):
             'final_decision':next((x['body'] for x in reversed(rows) if x['kind']=='decision' and x['sender']=='ceo'),None)})
    except ValueError as e:return error_reply(self,400,str(e))
   if path=='/api/settings':return json_reply(self,{'settings':integration_settings.status(),
-      'telegram':telegram_manager.status(),'usage':model_router.usage_month(DATA/'openai_usage.sqlite3')})
+      'telegram':telegram_manager.status(),'usage':model_router.usage_month(DATA/'openai_usage.sqlite3'),
+      'claude_usage':claude_provider.usage_month(DATA/'claude_usage.sqlite3')})
   if path=='/api/training':return json_reply(self,{'sessions':training_summary()})
   if path=='/api/training/detail':
    sid=parse_qs(urlparse(self.path).query).get('id',[''])[0]
@@ -248,6 +251,15 @@ class Handler(BaseHTTPRequestHandler):
    if n<=0 or n>MAX_JSON:raise ValueError('Dữ liệu vượt quá giới hạn')
    body=json.loads(self.rfile.read(n))
    if not isinstance(body,dict):raise ValueError('Cần đối tượng JSON')
+   if path=='/api/settings/ai':
+    settings=integration_settings.save_ai_providers(body)
+    return json_reply(self,{'ok':True,'settings':settings,
+        'message':'Đã lưu nhà cung cấp và mô hình AI cho từng vị trí.'})
+   if path=='/api/settings/claude/test':
+    return json_reply(self,integration_settings.test_claude())
+   if path=='/api/settings/claude/remove-key':
+    return json_reply(self,{'ok':True,'settings':integration_settings.remove_claude_key(),
+        'message':'Đã xóa Claude API key. Agent đang dùng Claude được chuyển về Ollama.'})
    if path=='/api/settings/openai':
     result=integration_settings.save_openai(body)
     return json_reply(self,{'ok':True,'settings':result,
