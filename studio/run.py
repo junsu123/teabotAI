@@ -28,6 +28,7 @@ import session_monitor
 import browser_listing
 import proxy_store
 import ceo_engine
+import agent_forum
 import main as legacy_ai
 import uuid
 import time
@@ -196,7 +197,20 @@ class Handler(BaseHTTPRequestHandler):
   if not self.is_local_host():return error_reply(self,403,'Chỉ cho phép truy cập cục bộ')
   path=urlparse(self.path).path
   if path=='/api/overview':return json_reply(self,overview())
-  if path=='/api/health':return json_reply(self,{'ok':True,'date':utc(),'version':'0.3.0','ceo_worker':'enabled'})
+  if path=='/api/health':return json_reply(self,{'ok':True,'date':utc(),'version':'0.4.0','ceo_worker':'enabled'})
+  if path=='/api/agent-forum':
+   try:
+    raw=parse_qs(urlparse(self.path).query).get('mission_id',[''])[0]
+    if not raw.isascii() or not raw.isdecimal():raise ValueError('Mã nhiệm vụ không hợp lệ')
+    mid=int(raw)
+    if mid<1:raise ValueError('Mã nhiệm vụ không hợp lệ')
+    with conn() as c:
+     mission=c.execute("SELECT id,title,status FROM missions WHERE id=? AND agent_id='ceo'",(mid,)).fetchone()
+    if mission is None:raise ValueError('Không tìm thấy nhiệm vụ của CEO')
+    rows=agent_forum.get_messages(DB,mid)
+    return json_reply(self,{'mission':dict(mission),'messages':rows,'count':len(rows),
+            'final_decision':next((x['body'] for x in reversed(rows) if x['kind']=='decision' and x['sender']=='ceo'),None)})
+   except ValueError as e:return error_reply(self,400,str(e))
   if path=='/api/training':return json_reply(self,{'sessions':training_summary()})
   if path=='/api/training/detail':
    sid=parse_qs(urlparse(self.path).query).get('id',[''])[0]
