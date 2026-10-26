@@ -38,7 +38,7 @@ TRAIN_DIR=DATA/"training"
 LEARN_PROCS={}
 DATA.mkdir(exist_ok=True)
 AGENTS=[
- {'id':'ceo','name':'AI CEO','role':'Điều phối & phê duyệt','emoji':'👑','room':'Phòng Founder','color':'#48c4ae'},
+ {'id':'ceo','name':'AI CEO','role':'Cổng nhận nhiệm vụ duy nhất','emoji':'👑','room':'Phòng Founder','color':'#48c4ae'},
  {'id':'research','name':'AI Research','role':'Nghiên cứu thị trường','emoji':'🔭','room':'Đài nghiên cứu','color':'#9d84ff'},
  {'id':'strategy','name':'AI Strategy','role':'Chiến lược marketing','emoji':'🎯','room':'Tháp chiến lược','color':'#ffbf65'},
  {'id':'creative','name':'AI Creative','role':'Nội dung, poster, video','emoji':'🎨','room':'Xưởng sáng tạo','color':'#ff8e67'},
@@ -90,6 +90,14 @@ def list_jobs():
    out.append(d)
  return out
 
+def queue_ceo_mission(title, detail=''):
+ """Only AI CEO receives requests from the owner; delegation is a separate internal step."""
+ if len(title.strip()) < 3:raise ValueError('Cần tên nhiệm vụ dài ít nhất 3 ký tự')
+ with conn() as c:
+  cur=c.execute('INSERT INTO missions(agent_id,title,detail,status,created_at,updated_at) VALUES(?,?,?,?,?,?)',
+               ('ceo',title,detail,'pending',utc(),utc()))
+  return cur.lastrowid
+
 def list_missions():
  with conn() as c:return [dict(r) for r in c.execute('SELECT * FROM missions ORDER BY id DESC LIMIT 200')]
 
@@ -126,7 +134,8 @@ def overview():
     'stats':{'agents':len(AGENTS),'shops':len(shops),'jobs_open':sum(x['status'] not in ('posted','rejected','failed') for x in jobs),
              'missions_open':sum(x['status']!='done' for x in ms),'lessons':len(list_learnings())},
     'integration':{'ollama_url':'http://localhost:11434','telegram':'Cần cấu hình token ở máy',
-            'browser':'Dùng Playwright ở bộ mã nguồn hiện có','publishing':'Chỉ hỗ trợ người điều hành hoàn tất đăng'}}
+            'browser':'Dùng Playwright ở bộ mã nguồn hiện có','publishing':'Chỉ hỗ trợ người điều hành hoàn tất đăng'},
+    'governance':{'owner_task_recipient':'ceo','direct_department_assignment':False,'autonomous_ceo_delegation':False}}
 
 def json_reply(handler, obj, status=200):
  b=json.dumps(obj,ensure_ascii=False).encode('utf-8')
@@ -262,15 +271,12 @@ class Handler(BaseHTTPRequestHandler):
     (TRAIN_DIR/(sid+'.stop')).touch()
     return json_reply(self,{'ok':True,'message':'Đã yêu cầu lưu và dừng phiên học'})
    if path=='/api/missions':
-    agent=sanitize(body.get('agent_id',''),40)
-    if agent not in {a['id'] for a in AGENTS}:raise ValueError('Nhân viên AI không hợp lệ')
+    agent=sanitize(body.get('agent_id','ceo'),40)
+    if agent!='ceo':raise ValueError('Chủ doanh nghiệp chỉ giao nhiệm vụ cho AI CEO')
     title=sanitize(body.get('title',''),150)
     detail=sanitize(body.get('detail',''),2000)
-    if len(title)<3:raise ValueError('Cần tên nhiệm vụ dài ít nhất 3 ký tự')
-    with conn() as c:
-     cur=c.execute('INSERT INTO missions(agent_id,title,detail,status,created_at,updated_at) VALUES(?,?,?,?,?,?)',
-                  (agent,title,detail,'pending',utc(),utc()))
-    return json_reply(self,{'ok':True,'mission_id':cur.lastrowid})
+    mid=queue_ceo_mission(title,detail)
+    return json_reply(self,{'ok':True,'mission_id':mid,'recipient':'ceo'})
    if path=='/api/missions/status':
     jid=int(body.get('id',0));status=body.get('status','')
     if status not in ('pending','in_progress','done','blocked'):raise ValueError('Trạng thái không hợp lệ')
@@ -304,8 +310,14 @@ class Handler(BaseHTTPRequestHandler):
     aid=sanitize(body.get('account_id',''),40)
     mode=body.get('mode','new')
     a=shop_profiles.get_account(aid)
-    jid=browser_listing.create_job(sku,a['platform'],mode,owner_id='',account_id=aid)
-    return json_reply(self,{'ok':True,'job_id':jid})
+    if mode not in ('new','update'):raise ValueError('Loại yêu cầu đăng bài không hợp lệ')
+    if sku not in list_products():raise ValueError('Không tìm thấy SKU')
+    # Owner request goes to CEO queue, never directly to a worker or browser job.
+    details=json.dumps({'kind':'listing_request','sku':sku,'account_id':aid,
+                        'platform':a['platform'],'mode':mode},ensure_ascii=False)
+    mid=queue_ceo_mission(f'Xử lý đăng sản phẩm {sku} cho {aid}',details)
+    return json_reply(self,{'ok':True,'mission_id':mid,'recipient':'ceo',
+                            'message':'Đã chuyển yêu cầu đến AI CEO; chưa đăng sản phẩm'})
    if path=='/api/jobs/reject':
     jid=int(body.get('id',0))
     browser_listing.update_state(jid,'rejected',by='gui_owner')
