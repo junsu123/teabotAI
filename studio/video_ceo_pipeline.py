@@ -79,7 +79,9 @@ def process(db_path,task,chat,record_step,update_report,finish):
             "định hướng phong cách chứ không sao chép nguyên văn. "
             "Không công dụng y tế chưa có chứng cứ, review giả hoặc giá ảo. "
             "Tên và bao bì sản phẩm phải giữ đúng.\n"+
-            context+"\nGIÁ BÁN LẺ (có thể chưa xác minh):\n"+retail[:4500]+
+            context+"\nPROMPT GỐC CỦA CHỦ (tham chiếu phong cách, không copy nguyên bản):\n"+
+            (brief.get("veo_template","")[:5500] or "Chưa có prompt mẫu.")+
+            "\nGIÁ BÁN LẺ (có thể chưa xác minh):\n"+retail[:4500]+
             "\nÝ TƯỞNG TIKTOK:\n"+research[:4800])
         pv.stage(db_path,mid,"script",script,"script_complete")
         cc.update(db_path,mid,"script_40s",script)
