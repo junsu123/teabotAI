@@ -19,16 +19,22 @@ SETTINGS=ROOT/"data"/"integrations.local.json"
 SERVICE="tea-ai-mars-integrations-v1"
 OPENAI_SECRET="openai-api-key"
 CLAUDE_SECRET="claude-api-key"
+GEMINI_SECRET="gemini-api-key"
+GROQ_SECRET="groq-api-key"
 TELEGRAM_SECRET="telegram-bot-token"
 VALID_AGENTS=("ceo","strategy","compliance","research","creative","analyst")
 from claude_provider import DEFAULT_MODELS as CLAUDE_MODELS, VALID_MODELS as CLAUDE_VALID_MODELS
+from free_cloud_providers import GEMINI_DEFAULT, GROQ_DEFAULT, GEMINI_MODELS, GROQ_MODELS
 VALID_MODELS=("gpt-6.1-sol","gpt-6-luna")
 DEFAULT_MODELS={"ceo":"gpt-6.1-sol","strategy":"gpt-6.1-sol",
  "compliance":"gpt-6.1-sol","research":"gpt-6-luna",
  "creative":"gpt-6-luna","analyst":"gpt-6-luna"}
 DEFAULT={"openai_agents":[],"openai_models":DEFAULT_MODELS,"monthly_limit_usd":12.0,
          "telegram_allowed_ids":[],"telegram_autostart":False,
-         "agent_providers":{a:"ollama" for a in VALID_AGENTS},
+         "agent_providers":{a:"auto" for a in VALID_AGENTS},
+         "provider_priority":["gemini","groq","claude","openai","ollama"],
+         "allow_paid_fallback":False,
+         "gemini_models":GEMINI_DEFAULT,"groq_models":GROQ_DEFAULT,
          "claude_models":CLAUDE_MODELS,"claude_monthly_limit_usd":12.0}
 
 
@@ -57,7 +63,7 @@ def has_secret(name):
 
 
 def set_secret(name,value):
-    if name not in (OPENAI_SECRET,CLAUDE_SECRET,TELEGRAM_SECRET):
+    if name not in (OPENAI_SECRET,CLAUDE_SECRET,GEMINI_SECRET,GROQ_SECRET,TELEGRAM_SECRET):
         raise ValueError("Loại khóa không hợp lệ")
     if not isinstance(value,str):
         raise ValueError("Khóa phải là văn bản")
@@ -68,7 +74,7 @@ def set_secret(name,value):
 
 
 def delete_secret(name):
-    if name not in (OPENAI_SECRET,CLAUDE_SECRET,TELEGRAM_SECRET):
+    if name not in (OPENAI_SECRET,CLAUDE_SECRET,GEMINI_SECRET,GROQ_SECRET,TELEGRAM_SECRET):
         raise ValueError("Loại khóa không hợp lệ")
     kr=keyring_backend()
     try: kr.delete_password(SERVICE,name)
@@ -79,14 +85,17 @@ def delete_secret(name):
 
 def read():
     config={**DEFAULT,"openai_models":dict(DEFAULT_MODELS),
-            "claude_models":dict(CLAUDE_MODELS),"agent_providers":dict(DEFAULT["agent_providers"])}
+            "claude_models":dict(CLAUDE_MODELS),"agent_providers":dict(DEFAULT["agent_providers"]),
+            "gemini_models":dict(GEMINI_DEFAULT),"groq_models":dict(GROQ_DEFAULT),
+            "provider_priority":list(DEFAULT["provider_priority"])}
     if SETTINGS.exists():
         try:
             saved=json.loads(SETTINGS.read_text(encoding="utf-8"))
             if isinstance(saved,dict):
                 for field in ("openai_agents","openai_models","monthly_limit_usd",
                               "telegram_allowed_ids","telegram_autostart","agent_providers",
-                              "claude_models","claude_monthly_limit_usd"):
+                              "claude_models","claude_monthly_limit_usd",
+                              "gemini_models","groq_models","provider_priority","allow_paid_fallback"):
                     if field in saved:config[field]=saved[field]
         except (OSError,ValueError):
             raise RuntimeError("Không đọc được cấu hình tích hợp; cần kiểm tra tệp integrations.local.json.")
@@ -169,6 +178,12 @@ def status():
         "claude_models":d["claude_models"],
         "claude_monthly_limit_usd":d["claude_monthly_limit_usd"],
         "claude_key_configured":has_secret(CLAUDE_SECRET),
+        "gemini_key_configured":has_secret(GEMINI_SECRET),
+        "groq_key_configured":has_secret(GROQ_SECRET),
+        "gemini_models":d["gemini_models"],
+        "groq_models":d["groq_models"],
+        "provider_priority":d["provider_priority"],
+        "allow_paid_fallback":d["allow_paid_fallback"],
         "monthly_limit_usd":d["monthly_limit_usd"],
         "openai_key_configured":has_secret(OPENAI_SECRET),
         "telegram_token_configured":has_secret(TELEGRAM_SECRET),
@@ -189,10 +204,16 @@ def openai_env(base=None):
         env["TEA_OPENAI_MODEL_"+agent.upper()]=model
     env["OPENAI_API_KEY"]=_get(OPENAI_SECRET)
     env["ANTHROPIC_API_KEY"]=_get(CLAUDE_SECRET)
+    env["GEMINI_API_KEY"]=_get(GEMINI_SECRET)
+    env["GROQ_API_KEY"]=_get(GROQ_SECRET)
+    env["TEA_ALLOW_PAID_FALLBACK"]="1" if d["allow_paid_fallback"] else "0"
+    env["TEA_PROVIDER_PRIORITY"]=",".join(d["provider_priority"])
     env["TEA_CLAUDE_MONTHLY_LIMIT_USD"]=str(d["claude_monthly_limit_usd"])
     for agent in VALID_AGENTS:
         env["TEA_AGENT_PROVIDER_"+agent.upper()]=d["agent_providers"].get(agent,"ollama")
         env["TEA_CLAUDE_MODEL_"+agent.upper()]=d["claude_models"].get(agent,CLAUDE_MODELS[agent])
+        env["TEA_GEMINI_MODEL_"+agent.upper()]=d["gemini_models"].get(agent,GEMINI_DEFAULT[agent])
+        env["TEA_GROQ_MODEL_"+agent.upper()]=d["groq_models"].get(agent,GROQ_DEFAULT[agent])
     return env
 
 
@@ -235,12 +256,29 @@ def save_ai_providers(body):
     providers=body.get("agent_providers",{})
     if not isinstance(providers,dict) or any(x not in VALID_AGENTS for x in providers):
         raise ValueError("Danh sách vị trí AI không hợp lệ")
-    if any(providers.get(a,"ollama") not in ("ollama","openai","claude") for a in VALID_AGENTS):
+    if any(providers.get(a,"auto") not in ("auto","gemini","groq","ollama","openai","claude") for a in VALID_AGENTS):
         raise ValueError("Nhà cung cấp AI không hợp lệ")
     o_models=body.get("openai_models",{})
     c_models=body.get("claude_models",{})
     if not isinstance(o_models,dict) or not isinstance(c_models,dict):
         raise ValueError("Cấu hình model không hợp lệ")
+    g_models=body.get("gemini_models",{})
+    q_models=body.get("groq_models",{})
+    if not isinstance(g_models,dict) or not isinstance(q_models,dict):
+        raise ValueError("Cấu hình model Gemini/Groq không hợp lệ")
+    selected_gemini={a:g_models.get(a,GEMINI_DEFAULT[a]) for a in VALID_AGENTS}
+    selected_groq={a:q_models.get(a,GROQ_DEFAULT[a]) for a in VALID_AGENTS}
+    if any(v not in GEMINI_MODELS for v in selected_gemini.values()):
+        raise ValueError("Model Gemini không được hỗ trợ")
+    if any(v not in GROQ_MODELS for v in selected_groq.values()):
+        raise ValueError("Model Groq không được hỗ trợ")
+    priority=body.get("provider_priority",list(DEFAULT["provider_priority"]))
+    expected=set(DEFAULT["provider_priority"])
+    if not isinstance(priority,list) or len(priority)!=len(expected) or set(priority)!=expected:
+        raise ValueError("Danh sách ưu tiên AI phải chứa mỗi nhà cung cấp đúng một lần")
+    allow_paid=body.get("allow_paid_fallback",False)
+    if type(allow_paid) is not bool:
+        raise ValueError("Chế độ dự phòng trả phí phải là đúng/sai")
     selected_openai={a:o_models.get(a,DEFAULT_MODELS[a]) for a in VALID_AGENTS}
     selected_claude={a:c_models.get(a,CLAUDE_MODELS[a]) for a in VALID_AGENTS}
     if any(v not in VALID_MODELS for v in selected_openai.values()):
@@ -249,11 +287,19 @@ def save_ai_providers(body):
         raise ValueError("Model Claude không hỗ trợ")
     openai_limit=_limit(body.get("monthly_limit_usd",12),"OpenAI")
     claude_limit=_limit(body.get("claude_monthly_limit_usd",12),"Claude")
+    g_key=body.get("gemini_api_key","") or ""
+    q_key=body.get("groq_api_key","") or ""
     o_key=body.get("openai_api_key","") or ""
     c_key=body.get("claude_api_key","") or ""
+    if g_key:set_secret(GEMINI_SECRET,g_key)
+    if q_key:set_secret(GROQ_SECRET,q_key)
     if o_key:set_secret(OPENAI_SECRET,o_key)
     if c_key:set_secret(CLAUDE_SECRET,c_key)
-    final={a:providers.get(a,"ollama") for a in VALID_AGENTS}
+    final={a:providers.get(a,"auto") for a in VALID_AGENTS}
+    if "gemini" in final.values() and not has_secret(GEMINI_SECRET):
+        raise ValueError("Hãy lưu Gemini API key để chọn Gemini trực tiếp.")
+    if "groq" in final.values() and not has_secret(GROQ_SECRET):
+        raise ValueError("Hãy lưu Groq API key để chọn Groq trực tiếp.")
     if "openai" in final.values() and not has_secret(OPENAI_SECRET):
         raise ValueError("Muốn dùng OpenAI, hãy nhập và lưu API key trước.")
     if "claude" in final.values() and not has_secret(CLAUDE_SECRET):
@@ -261,6 +307,8 @@ def save_ai_providers(body):
     d=read()
     d.update(agent_providers=final,openai_agents=[a for a in VALID_AGENTS if final[a]=="openai"],
              openai_models=selected_openai,claude_models=selected_claude,
+             gemini_models=selected_gemini,groq_models=selected_groq,
+             provider_priority=priority,allow_paid_fallback=allow_paid,
              monthly_limit_usd=openai_limit,claude_monthly_limit_usd=claude_limit)
     _write(d)
     return status()
@@ -273,6 +321,32 @@ def remove_claude_key():
     _write(d)
     delete_secret(CLAUDE_SECRET)
     return status()
+
+def remove_gemini_key():
+    d=read()
+    for a in VALID_AGENTS:
+        if d["agent_providers"].get(a)=="gemini":
+            d["agent_providers"][a]="auto"
+    _write(d)
+    delete_secret(GEMINI_SECRET)
+    return status()
+
+def remove_groq_key():
+    d=read()
+    for a in VALID_AGENTS:
+        if d["agent_providers"].get(a)=="groq":
+            d["agent_providers"][a]="auto"
+    _write(d)
+    delete_secret(GROQ_SECRET)
+    return status()
+
+def test_gemini(http=None):
+    from free_cloud_providers import test_gemini as call_test
+    return call_test(_get(GEMINI_SECRET),transport=http)
+
+def test_groq(http=None):
+    from free_cloud_providers import test_groq as call_test
+    return call_test(_get(GROQ_SECRET),transport=http)
 
 def test_claude(http=None):
     """Anthropic models.list is a read-only authentication and availability test."""
