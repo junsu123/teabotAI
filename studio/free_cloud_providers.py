@@ -152,9 +152,14 @@ def gemini_chat(agent, prompt, *, key, model, transport=None):
 def groq_chat(agent, prompt, *, key, model, transport=None):
     if model not in GROQ_MODELS:raise ValueError("Mô hình Groq chưa được phép")
     if not key:raise RuntimeError("Chưa lưu Groq API key trong phần mềm")
-    data={"model":model,"temperature":0.3,"max_completion_tokens":1050,
+    # GPT-OSS can spend part of max_completion_tokens on internal reasoning.
+    # Low effort leaves more room for the actual final Vietnamese answer.
+    data={"model":model,"temperature":0.3,"max_completion_tokens":1600,
           "messages":[{"role":"system","content":_system(agent)},
                       {"role":"user","content":str(prompt)[:20000]}]}
+    if model.startswith("openai/gpt-oss-"):
+        data["reasoning_effort"]="low"
+        data["include_reasoning"]=False
     req=Request(GROQ_ENDPOINT,method="POST",
         data=json.dumps(data,ensure_ascii=False).encode("utf-8"),
         headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"})
@@ -162,8 +167,29 @@ def groq_chat(agent, prompt, *, key, model, transport=None):
     if not isinstance(response,dict):raise RuntimeError("Groq trả về dữ liệu không hợp lệ")
     choices=response.get("choices") or []
     answer=(choices[0].get("message",{}).get("content") or "").strip() if choices else ""
-    if not answer:raise RuntimeError("Groq không trả về nội dung")
+    if not answer:
+        finish=choices[0].get("finish_reason","") if choices and isinstance(choices[0],dict) else ""
+        if finish=="length":
+            raise RuntimeError("Groq đã dùng hết giới hạn token trước khi tạo câu trả lời. Thử giảm yêu cầu hoặc chia nhiệm vụ.")
+        raise RuntimeError("Groq không trả về nội dung văn bản. Model đã phản hồi nhưng không có câu trả lời.")
     return answer
+
+
+def test_saved_groq_agent(key,agent,model,transport=None):
+    """Small explicit paid-or-free-tier test using exactly the CEO runtime path.
+
+    Uses the *saved* key and the selected model; no input key override accepted.
+    The prompt is intentionally tiny, but the API payload matches groq_chat().
+    """
+    from model_router import VALID_AGENTS
+    if agent not in VALID_AGENTS or model not in GROQ_MODELS:
+        raise ValueError("Agent hoặc model Groq không hợp lệ")
+    output=groq_chat(agent,
+                     "Hãy trả lời bằng một câu tiếng Việt ngắn: Kết nối AI hoạt động.",
+                     key=key,model=model,transport=transport)
+    return {"ok":True,"agent":agent,"model":model,
+            "message":"Khóa đã lưu trong database và model của agent kết nối Groq thành công.",
+            "sample":output[:120]}
 
 
 def test_gemini(key,transport=None):
