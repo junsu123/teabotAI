@@ -18,14 +18,18 @@ ROOT=Path(__file__).resolve().parent
 SETTINGS=ROOT/"data"/"integrations.local.json"
 SERVICE="tea-ai-mars-integrations-v1"
 OPENAI_SECRET="openai-api-key"
+CLAUDE_SECRET="claude-api-key"
 TELEGRAM_SECRET="telegram-bot-token"
 VALID_AGENTS=("ceo","strategy","compliance","research","creative","analyst")
+from claude_provider import DEFAULT_MODELS as CLAUDE_MODELS, VALID_MODELS as CLAUDE_VALID_MODELS
 VALID_MODELS=("gpt-6.1-sol","gpt-6-luna")
 DEFAULT_MODELS={"ceo":"gpt-6.1-sol","strategy":"gpt-6.1-sol",
  "compliance":"gpt-6.1-sol","research":"gpt-6-luna",
  "creative":"gpt-6-luna","analyst":"gpt-6-luna"}
 DEFAULT={"openai_agents":[],"openai_models":DEFAULT_MODELS,"monthly_limit_usd":12.0,
-         "telegram_allowed_ids":[],"telegram_autostart":False}
+         "telegram_allowed_ids":[],"telegram_autostart":False,
+         "agent_providers":{a:"ollama" for a in VALID_AGENTS},
+         "claude_models":CLAUDE_MODELS,"claude_monthly_limit_usd":12.0}
 
 
 def keyring_backend():
@@ -53,7 +57,7 @@ def has_secret(name):
 
 
 def set_secret(name,value):
-    if name not in (OPENAI_SECRET,TELEGRAM_SECRET):
+    if name not in (OPENAI_SECRET,CLAUDE_SECRET,TELEGRAM_SECRET):
         raise ValueError("Loại khóa không hợp lệ")
     if not isinstance(value,str):
         raise ValueError("Khóa phải là văn bản")
@@ -64,7 +68,7 @@ def set_secret(name,value):
 
 
 def delete_secret(name):
-    if name not in (OPENAI_SECRET,TELEGRAM_SECRET):
+    if name not in (OPENAI_SECRET,CLAUDE_SECRET,TELEGRAM_SECRET):
         raise ValueError("Loại khóa không hợp lệ")
     kr=keyring_backend()
     try: kr.delete_password(SERVICE,name)
@@ -74,16 +78,22 @@ def delete_secret(name):
 
 
 def read():
-    config={**DEFAULT,"openai_models":dict(DEFAULT_MODELS)}
+    config={**DEFAULT,"openai_models":dict(DEFAULT_MODELS),
+            "claude_models":dict(CLAUDE_MODELS),"agent_providers":dict(DEFAULT["agent_providers"])}
     if SETTINGS.exists():
         try:
             saved=json.loads(SETTINGS.read_text(encoding="utf-8"))
             if isinstance(saved,dict):
                 for field in ("openai_agents","openai_models","monthly_limit_usd",
-                              "telegram_allowed_ids","telegram_autostart"):
+                              "telegram_allowed_ids","telegram_autostart","agent_providers",
+                              "claude_models","claude_monthly_limit_usd"):
                     if field in saved:config[field]=saved[field]
         except (OSError,ValueError):
             raise RuntimeError("Không đọc được cấu hình tích hợp; cần kiểm tra tệp integrations.local.json.")
+        if "agent_providers" not in saved:
+            # Existing v2 installs retain their previously selected OpenAI agents.
+            config["agent_providers"]={a:("openai" if a in config["openai_agents"] else "ollama")
+                                       for a in VALID_AGENTS}
     return config
 
 
@@ -131,6 +141,9 @@ def save_openai(body):
         raise ValueError("Hãy nhập và lưu OpenAI API key trước khi bật agent")
     d=read()
     d.update(openai_agents=agents,openai_models=selected,monthly_limit_usd=limit)
+    for a in VALID_AGENTS:
+        if a in agents:d["agent_providers"][a]="openai"
+        elif d["agent_providers"].get(a)=="openai":d["agent_providers"][a]="ollama"
     _write(d)
     return status()
 
@@ -152,6 +165,10 @@ def status():
     return {
         "openai_agents":d["openai_agents"],
         "openai_models":d["openai_models"],
+        "agent_providers":d["agent_providers"],
+        "claude_models":d["claude_models"],
+        "claude_monthly_limit_usd":d["claude_monthly_limit_usd"],
+        "claude_key_configured":has_secret(CLAUDE_SECRET),
         "monthly_limit_usd":d["monthly_limit_usd"],
         "openai_key_configured":has_secret(OPENAI_SECRET),
         "telegram_token_configured":has_secret(TELEGRAM_SECRET),
@@ -171,6 +188,11 @@ def openai_env(base=None):
     for agent,model in d["openai_models"].items():
         env["TEA_OPENAI_MODEL_"+agent.upper()]=model
     env["OPENAI_API_KEY"]=_get(OPENAI_SECRET)
+    env["ANTHROPIC_API_KEY"]=_get(CLAUDE_SECRET)
+    env["TEA_CLAUDE_MONTHLY_LIMIT_USD"]=str(d["claude_monthly_limit_usd"])
+    for agent in VALID_AGENTS:
+        env["TEA_AGENT_PROVIDER_"+agent.upper()]=d["agent_providers"].get(agent,"ollama")
+        env["TEA_CLAUDE_MODEL_"+agent.upper()]=d["claude_models"].get(agent,CLAUDE_MODELS[agent])
     return env
 
 
@@ -189,6 +211,8 @@ def telegram_env():
 def remove_openai_key():
     d=read()
     d["openai_agents"]=[]
+    for a in VALID_AGENTS:
+        if d["agent_providers"].get(a)=="openai":d["agent_providers"][a]="ollama"
     _write(d)
     delete_secret(OPENAI_SECRET)
     return status()
@@ -199,6 +223,80 @@ def remove_telegram_token():
     _write(d)
     delete_secret(TELEGRAM_SECRET)
     return status()
+
+def _limit(value,label):
+    try: v=float(value)
+    except (TypeError,ValueError):raise ValueError("Ngân sách "+label+" phải là một số USD hợp lệ")
+    if not 0 < v <= 1000:raise ValueError("Ngân sách "+label+" phải lớn hơn 0 và không quá 1000 USD")
+    return v
+
+def save_ai_providers(body):
+    """Single GUI form: user explicitly chooses a provider for each agent."""
+    providers=body.get("agent_providers",{})
+    if not isinstance(providers,dict) or any(x not in VALID_AGENTS for x in providers):
+        raise ValueError("Danh sách vị trí AI không hợp lệ")
+    if any(providers.get(a,"ollama") not in ("ollama","openai","claude") for a in VALID_AGENTS):
+        raise ValueError("Nhà cung cấp AI không hợp lệ")
+    o_models=body.get("openai_models",{})
+    c_models=body.get("claude_models",{})
+    if not isinstance(o_models,dict) or not isinstance(c_models,dict):
+        raise ValueError("Cấu hình model không hợp lệ")
+    selected_openai={a:o_models.get(a,DEFAULT_MODELS[a]) for a in VALID_AGENTS}
+    selected_claude={a:c_models.get(a,CLAUDE_MODELS[a]) for a in VALID_AGENTS}
+    if any(v not in VALID_MODELS for v in selected_openai.values()):
+        raise ValueError("Model OpenAI không hỗ trợ")
+    if any(v not in CLAUDE_VALID_MODELS for v in selected_claude.values()):
+        raise ValueError("Model Claude không hỗ trợ")
+    openai_limit=_limit(body.get("monthly_limit_usd",12),"OpenAI")
+    claude_limit=_limit(body.get("claude_monthly_limit_usd",12),"Claude")
+    o_key=body.get("openai_api_key","") or ""
+    c_key=body.get("claude_api_key","") or ""
+    if o_key:set_secret(OPENAI_SECRET,o_key)
+    if c_key:set_secret(CLAUDE_SECRET,c_key)
+    final={a:providers.get(a,"ollama") for a in VALID_AGENTS}
+    if "openai" in final.values() and not has_secret(OPENAI_SECRET):
+        raise ValueError("Muốn dùng OpenAI, hãy nhập và lưu API key trước.")
+    if "claude" in final.values() and not has_secret(CLAUDE_SECRET):
+        raise ValueError("Muốn dùng Claude, hãy nhập và lưu Anthropic API key trước.")
+    d=read()
+    d.update(agent_providers=final,openai_agents=[a for a in VALID_AGENTS if final[a]=="openai"],
+             openai_models=selected_openai,claude_models=selected_claude,
+             monthly_limit_usd=openai_limit,claude_monthly_limit_usd=claude_limit)
+    _write(d)
+    return status()
+
+def remove_claude_key():
+    d=read()
+    for a in VALID_AGENTS:
+        if d["agent_providers"].get(a)=="claude":
+            d["agent_providers"][a]="ollama"
+    _write(d)
+    delete_secret(CLAUDE_SECRET)
+    return status()
+
+def test_claude(http=None):
+    """Anthropic models.list is a read-only authentication and availability test."""
+    key=_get(CLAUDE_SECRET)
+    if not key:raise ValueError("Hãy lưu Claude API key trước khi kiểm tra")
+    request=Request("https://api.anthropic.com/v1/models?limit=100",
+       headers={"x-api-key":key,"anthropic-version":"2023-06-01","accept":"application/json"})
+    try:
+        if http is None:
+            with urlopen(request,timeout=10) as response:
+                content=json.loads(response.read(300000).decode("utf-8"))
+        else:content=http(request)
+    except HTTPError as ex:
+        raise ValueError("Claude API trả về HTTP "+str(ex.code)+". Kiểm tra key và quyền truy cập.") from None
+    except (URLError,TimeoutError,OSError):
+        raise ValueError("Không thể kết nối Claude API. Kiểm tra Internet.") from None
+    if not isinstance(content,dict) or not isinstance(content.get("data"),list):
+        raise ValueError("Claude API trả về danh sách model không hợp lệ")
+    found={str(x.get("id","")) for x in content["data"] if isinstance(x,dict)}
+    d=read()
+    selected={d["claude_models"][a] for a in VALID_AGENTS if d["agent_providers"].get(a)=="claude"}
+    return {"ok":True,
+            "message":"Claude API đã chấp nhận khóa. Chưa tạo câu trả lời có tính phí.",
+            "unlisted_models":sorted(selected-found)}
 
 def test_openai(http=None):
     """Read-only models listing; no token generation or billed inference."""
