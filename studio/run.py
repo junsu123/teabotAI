@@ -251,6 +251,18 @@ class Handler(BaseHTTPRequestHandler):
    if n<=0 or n>MAX_JSON:raise ValueError('Dữ liệu vượt quá giới hạn')
    body=json.loads(self.rfile.read(n))
    if not isinstance(body,dict):raise ValueError('Cần đối tượng JSON')
+   if path=='/api/settings/secret/reveal':
+    # Never serve saved secrets through GET, status, cross-origin requests,
+    # or form submissions. A deliberate same-origin JavaScript POST is required.
+    if (self.headers.get('Origin') != 'http://'+self.headers.get('Host','')
+        or self.headers.get('X-Requested-With') != 'Tea-Mars-UI'
+        or self.headers.get('Content-Type','').split(';',1)[0].strip() != 'application/json'
+        or self.headers.get('Sec-Fetch-Site','same-origin') != 'same-origin'):
+     return error_reply(self,403,'Yêu cầu xem khóa phải xuất phát từ giao diện cục bộ.')
+    if body.get('confirm_reveal') is not True:
+     raise ValueError('Cần xác nhận xem khóa API đã lưu.')
+    secret=integration_settings.reveal_secret(body.get('provider'))
+    return json_reply(self,{'ok':True,'secret':secret})
    if path=='/api/settings/ai':
     settings=integration_settings.save_ai_providers(body)
     return json_reply(self,{'ok':True,'settings':settings,
