@@ -179,7 +179,7 @@ def _priority(env):
 
 def _call_provider(provider,agent,prompt,local_chat,db_file,env,transport=None):
     if provider=="ollama":
-        return local_chat(agent, VIETNAMESE_RULES+"\\n\\n"+prompt)
+        return local_chat(agent, VIETNAMESE_RULES+"\n\n"+prompt)
     if provider=="gemini" or provider=="groq":
         import free_cloud_providers as cloud
         key=env.get("GEMINI_API_KEY","") if provider=="gemini" else env.get("GROQ_API_KEY","")
