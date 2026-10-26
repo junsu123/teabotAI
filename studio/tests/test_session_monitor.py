@@ -77,8 +77,12 @@ class SessionMonitorTests(unittest.TestCase):
             status_text = (folder / sm.STATUS_FILE).read_text(encoding="utf-8")
             self.assertNotIn("SUPER_SECRET", status_text)
             self.assertNotIn("cookie_count", status_text)
-            # No URL with session-bearing query is stored as a probe.
-            self.assertFalse((folder / sm.PROBE_FILE).exists())
+            # Query (and any token) is stripped; only the safe protected path persists.
+            self.assertTrue((folder / sm.PROBE_FILE).exists())
+            probe_text = (folder / sm.PROBE_FILE).read_text(encoding="utf-8")
+            self.assertNotIn("SUPER_SECRET", probe_text)
+            self.assertEqual(json.loads(probe_text)["url"],
+                             "https://banhang.shopee.vn/portal/product/list")
 
     def test_save_safe_verified_protected_url_and_expire(self):
         with tempfile.TemporaryDirectory() as temp:
