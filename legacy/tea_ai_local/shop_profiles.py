@@ -254,17 +254,57 @@ def scan_local_html(html_path: str | Path, account_id: str, mode: str) -> Path:
     return dest
 
 
-def interactive_open(account_id: str) -> None:
+def check_account_once(account_id: str) -> dict:
+    """User-requested, visible browser read-only session check for a closed profile."""
     from playwright.sync_api import sync_playwright
-    a = get_account(account_id)
+    from session_monitor import inspect_and_save, write_status, read_status
+    account = get_account(account_id)
+    folder = PROFILES / account_id
+    lock = folder / '.tea_ai_in_use'
+    if lock.exists():
+        # interactive_open monitors and writes the same status every few seconds.
+        old = read_status(folder)
+        return {**old, 'message': 'Chrome profile đang mở. Đang theo dõi trạng thái trong cửa sổ đăng nhập.'}
+    write_status(folder, 'checking', 0, 'Đang mở trình duyệt để kiểm tra phiên đăng nhập...')
+    try:
+        with sync_playwright() as playwright:
+            with account_context(playwright, account_id) as context:
+                page = context.pages[0] if context.pages else context.new_page()
+                page.goto(account['start_url'], wait_until='domcontentloaded', timeout=30000)
+                page.wait_for_timeout(2500)
+                return inspect_and_save(context, account, folder)
+    except Exception as exc:
+        msg = f'Không thể kiểm tra phiên đăng nhập: {type(exc).__name__}. Đóng profile, kiểm tra mạng/proxy và thử lại.'
+        write_status(folder, 'error', 0, msg)
+        return read_status(folder)
+
+
+def interactive_open(account_id: str) -> None:
+    """Manual login; automatically inspect status, without exporting cookies."""
+    from playwright.sync_api import sync_playwright
+    from session_monitor import inspect_and_save, write_status
+    account = get_account(account_id)
+    folder = PROFILES / account_id
     with sync_playwright() as playwright:
         with account_context(playwright, account_id) as context:
             page = context.pages[0] if context.pages else context.new_page()
-            page.goto(a['start_url'], wait_until='domcontentloaded', timeout=60000)
-            print(f'Đã mở profile {account_id} trên {a["platform"]}. Đăng nhập/thao tác thủ công trong cửa sổ Chrome.')
-            print('Không có thao tác tự động đăng sản phẩm; phiên đăng nhập được lưu trong thư mục profile.')
-            input('Sau khi hoàn tất, quay lại cửa sổ này và nhấn Enter để đóng trình duyệt... ')
-
+            page.goto(account['start_url'], wait_until='domcontentloaded', timeout=60000)
+            print(f'Đã mở Chrome Profile {account_id}. Đăng nhập thủ công trong cửa sổ Chrome.')
+            print('Phần mềm kiểm tra trạng thái mỗi 5 giây. Đóng cửa sổ Chrome để kết thúc.')
+            while True:
+                try:
+                    alive = [p for p in context.pages if not p.is_closed()]
+                    if not alive:
+                        break
+                    inspect_and_save(context, account, folder)
+                    # Event-loop wait also lets Playwright notice navigation/closure.
+                    alive[0].wait_for_timeout(5000)
+                except Exception as exc:
+                    if not [p for p in context.pages if not p.is_closed()]:
+                        break
+                    write_status(folder, 'error', 0,
+                                 f'Không thể đọc trạng thái: {type(exc).__name__}; hãy mở lại profile.')
+                    break
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='TEA AI | quản lý profile nhiều gian hàng và đọc DOM trên HTML mẫu')
@@ -277,6 +317,7 @@ def main(argv=None):
     add.add_argument('--browser', choices=('chrome','chromium'), default='chrome')
     commands.add_parser('list')
     op = commands.add_parser('open'); op.add_argument('account_id')
+    ck = commands.add_parser('check'); ck.add_argument('account_id')
     scan = commands.add_parser('scan-demo'); scan.add_argument('account_id')
     scan.add_argument('html_path'); scan.add_argument('--mode', choices=('new','update'), default='new')
     args = parser.parse_args(argv)
@@ -292,6 +333,8 @@ def main(argv=None):
             print(json.dumps(all_accounts(), ensure_ascii=False, indent=2))
         elif args.cmd == 'open':
             interactive_open(args.account_id)
+        elif args.cmd == 'check':
+            print(json.dumps(check_account_once(args.account_id), ensure_ascii=False))
         elif args.cmd == 'scan-demo':
             print(scan_local_html(args.html_path, args.account_id, args.mode))
     except (ValueError, RuntimeError, OSError) as exc:
