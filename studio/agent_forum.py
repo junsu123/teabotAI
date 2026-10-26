@@ -39,6 +39,10 @@ def record(db_path, mission_id, sender, recipient, kind, message):
         raise ValueError("Agent không hợp lệ")
     if kind not in ALLOWED_KINDS:
         raise ValueError("Loại trao đổi không hợp lệ")
+    if kind == "decision" and sender != "ceo":
+        raise ValueError("Chỉ AI CEO được chốt phương án")
+    if kind in {"assignment"} and sender != "ceo":
+        raise ValueError("Chỉ AI CEO được phân công nội bộ")
     # Do not persist raw prompts, auth data, credentials, tokens or hidden reasoning.
     text = str(message or "").strip()[:5500]
     if not text:
