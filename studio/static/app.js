@@ -164,8 +164,25 @@ function showVideoRoomDetail(id){
  const status=v.status==='awaiting_video_render'?'Sẵn sàng đưa vào công cụ tạo video sau khi chủ duyệt':
   v.status==='needs_review'?'Tạm dừng: cần kiểm duyệt/chỉnh sửa':'Đang trong quy trình';
  const part=(title,txt)=>`<details class="video-detail-section"><summary>${title}</summary><pre>${h(txt||'Chưa có kết quả')}</pre></details>`;
+ const sceneMarkup=scenes.length===5
+  ?scenes.map(x=>`<div class="video-scene-card">
+   <div class="video-work-top"><h4>Cảnh ${x.scene}/5 · ${x.duration_seconds} giây</h4>
+   <button class="small-btn" onclick="copyCommerce(${id},'veo_prompts',${x.scene})">Sao chép prompt cảnh ${x.scene}</button></div>
+   <pre>${h(x.veo_prompt)}</pre><div class="tagline">Thoại: ${h(x.dialogue||'Không thoại')}</div>
+   </div>`).join('')
+  :`<pre>${h(commerce.veo_prompts||'Chưa có 5 prompt hợp lệ. Chờ kiểm duyệt và kết quả Phòng Video AI.')}</pre>`;
  openModal(`<div class="eyebrow">VIDEO AI • DỰ ÁN #${id}</div><h2>${h(v.product_name)}</h2>
  <div class="note">${h(status)}</div>
+ ${part('🏷 Tiêu đề SEO Shopee / TikTok Shop',commerce.seo_title)}
+ <button class="small-btn" onclick="copyCommerce(${id},'seo_title')">Sao chép tiêu đề SEO</button>
+ ${part('📝 Mô tả sản phẩm SEO',commerce.seo_description)}
+ <button class="small-btn" onclick="copyCommerce(${id},'seo_description')">Sao chép mô tả SEO</button>
+ ${part('💰 Nghiên cứu giá bán lẻ · nguồn cần xác minh',commerce.retail_price)}
+ <button class="small-btn" onclick="copyCommerce(${id},'retail_price')">Sao chép giá bán lẻ</button>
+ ${part('🎬 Kịch bản video bán hàng 40 giây · 5 cảnh × 8 giây',commerce.script_40s)}
+ <button class="small-btn" onclick="copyCommerce(${id},'script_40s')">Sao chép kịch bản 40 giây</button>
+ <details class="video-detail-section" open><summary>🎥 5 prompt Google Veo 3 · mỗi cảnh 8 giây</summary>
+ ${sceneMarkup}</details>
  ${part('🔎 Nghiên cứu TikTok',v.research)}
  ${part('✍️ Kịch bản bán hàng',v.script)}
  ${part('🛡️ Kiểm duyệt',v.compliance)}
