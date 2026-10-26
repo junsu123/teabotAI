@@ -200,25 +200,45 @@ function aiSettingsSection(){
       claudeModels=cfg.claude_models||{},openaiModels=cfg.openai_models||{};
  const roles=['ceo','strategy','compliance','research','creative','analyst'];
  return `<section class="panel padded" style="min-width:0">
- <h3>✦ Chế độ API miễn phí – Gemini chính, Groq phụ</h3>
- <p class="tagline">Thiết lập trực tiếp: Gemini là AI chính, Groq dự phòng. Claude, OpenAI và Ollama vẫn có thể chọn. Chỉ AI CEO quyết định cuối.</p>
+ <div class="integration-hero">
+ <div class="integration-eyebrow">TRUNG TÂM CẤU HÌNH AI</div>
+ <h2>Gemini chính <span>·</span> Groq dự phòng</h2>
+ <p>Ba bước thiết lập rõ ràng. Không cần sửa .env, AI CEO vẫn là người chốt phương án.</p>
+ <div class="integration-route"><span>01 <b>Gemini</b></span><span aria-hidden="true">→</span><span>02 <b>Groq</b></span><span aria-hidden="true">→</span><span>03 <b>Ollama</b></span></div>
+ </div>
  <form id="aiSettingsForm" class="integration-form" onsubmit="saveAISettings(event)" oninput="markIntegrationDirty()" onchange="markIntegrationDirty()">
  <label class="checkbox-line" style="margin:14px 0;padding:12px;border:1px solid #315062;border-radius:10px">
  <input type="checkbox" name="free_only" onchange="updateFreeOnlyControls()" ${cfg.free_only!==false?'checked':''}>
  <strong>Chỉ sử dụng model có gói API miễn phí (khuyên dùng)</strong></label>
  <div class="note">Gemini Free Tier và Groq Free Plan tùy tài khoản, hạn mức và trạng thái thanh toán. Tùy chọn này chặn Claude/OpenAI, nhưng không bảo đảm tài khoản Gemini/Groq đã bật billing sẽ không phát sinh phí.</div>
- <div class="field"><label>Gemini API Key (Google AI Studio) – ƯU TIÊN CHÍNH</label>
- <input name="gemini_api_key" type="password" autocomplete="new-password" placeholder="${cfg.gemini_key_configured?'Đã lưu Gemini key – để trống để giữ nguyên':'Dán Gemini API key tại đây'}"></div>
- <div class="field"><label>Groq API Key – DỰ PHÒNG</label>
- <input name="groq_api_key" type="password" autocomplete="new-password" placeholder="${cfg.groq_key_configured?'Đã lưu Groq key – để trống để giữ nguyên':'Dán Groq API key tại đây'}"></div>
- <div class="form-bottom" style="display:flex;flex-wrap:wrap;gap:8px">
- <button type="button" class="small-btn" onclick="testConnection('gemini')">✓ Kiểm tra Gemini</button>
- <button type="button" class="small-btn" onclick="testConnection('groq')">✓ Kiểm tra Groq</button>
- <button type="button" class="small-btn" onclick="removeIntegrationSecret('gemini')" ${cfg.gemini_key_configured?'':'disabled'}>Xóa Gemini key</button>
- <button type="button" class="small-btn" onclick="removeIntegrationSecret('groq')" ${cfg.groq_key_configured?'':'disabled'}>Xóa Groq key</button></div>
- <div id="groqConnectionResult" class="note" role="status" aria-live="polite">
- Bấm Kiểm tra Groq để xác minh ngay cả khi chưa lưu key. Nếu thành công, hãy bấm Lưu cấu hình AI để sử dụng khóa.</div>
- <div class="note">Thứ tự ưu tiên: <strong>Gemini → Groq → Claude → OpenAI → Ollama</strong>.
+ <div class="integration-section-title"><span>BƯỚC 1</span><div><h3>Kết nối hai dịch vụ AI</h3><p>Nhập API key của bạn, bấm kiểm tra, sau đó lưu ở cuối trang.</p></div></div>
+ <div class="integration-key-layout">
+ <article class="integration-key-card">
+ <div class="integration-key-top"><span class="integration-key-icon">✦</span><span><strong>Google Gemini</strong><small>Nhà cung cấp chính</small></span>
+ <span class="integration-key-status ${cfg.gemini_key_configured?'is-saved':''}">${cfg.gemini_key_configured?'● Đã lưu':'○ Chưa lưu'}</span></div>
+ <label class="integration-field-label" for="geminiApiKeyInput">Gemini API Key</label>
+ <div class="integration-input-wrap"><input id="geminiApiKeyInput" name="gemini_api_key" type="password" autocomplete="new-password" spellcheck="false"
+ placeholder="${cfg.gemini_key_configured?'Khóa đã lưu · để trống nếu không đổi':'Dán Gemini API key tại đây'}">
+ <button type="button" class="integration-show-btn" onclick="toggleIntegrationKey('geminiApiKeyInput',this)" aria-label="Hiện hoặc ẩn Gemini API key">Hiện</button></div>
+ <div class="integration-key-helper">${cfg.gemini_key_configured?'Khóa đang nằm trong kho mật khẩu Windows.':'Có thể kiểm tra trước khi lưu khóa.'}
+ <a href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">Lấy API key</a></div>
+ <div class="integration-key-actions"><button type="button" class="small-btn" onclick="testConnection('gemini')">✓ Kiểm tra Gemini</button>
+ ${cfg.gemini_key_configured?'<button type="button" class="integration-danger" onclick="removeIntegrationSecret(\'gemini\')">Xóa khóa</button>':''}</div>
+ <div id="geminiConnectionResult" class="integration-feedback" role="status" aria-live="polite" hidden></div>
+ </article>
+ <article class="integration-key-card">
+ <div class="integration-key-top"><span class="integration-key-icon">↗</span><span><strong>GroqCloud</strong><small>Dự phòng khi Gemini gián đoạn</small></span>
+ <span class="integration-key-status ${cfg.groq_key_configured?'is-saved':''}">${cfg.groq_key_configured?'● Đã lưu':'○ Chưa lưu'}</span></div>
+ <label class="integration-field-label" for="groqApiKeyInput">Groq API Key</label>
+ <div class="integration-input-wrap"><input id="groqApiKeyInput" name="groq_api_key" type="password" autocomplete="new-password" spellcheck="false"
+ placeholder="${cfg.groq_key_configured?'Khóa đã lưu · để trống nếu không đổi':'Dán Groq API key tại đây'}">
+ <button type="button" class="integration-show-btn" onclick="toggleIntegrationKey('groqApiKeyInput',this)" aria-label="Hiện hoặc ẩn Groq API key">Hiện</button></div>
+ <div class="integration-key-helper">${cfg.groq_key_configured?'Khóa đang nằm trong kho mật khẩu Windows.':'Có thể kiểm tra trước khi lưu khóa.'}
+ <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Lấy API key</a></div>
+ <div class="integration-key-actions"><button type="button" class="small-btn" onclick="testConnection('groq')">✓ Kiểm tra Groq</button>
+ ${cfg.groq_key_configured?'<button type="button" class="integration-danger" onclick="removeIntegrationSecret(\'groq\')">Xóa khóa</button>':''}</div>
+ <div id="groqConnectionResult" class="integration-feedback" role="status" aria-live="polite" hidden></div>
+ </article></div> <div class="note">Thứ tự ưu tiên: <strong>Gemini → Groq → Claude → OpenAI → Ollama</strong>.
  Trong chế độ TỰ ĐỘNG, Claude và OpenAI chỉ được thử nếu bạn cho phép API trả phí. Không có giới hạn đảm bảo miễn phí: quota tùy tài khoản Google/Groq.</div>
  <label class="checkbox-line"><input type="checkbox" name="allow_paid_fallback" ${cfg.allow_paid_fallback?'checked':''} ${cfg.free_only!==false?'disabled':''}>
  Cho phép tự chuyển sang Claude/OpenAI trả phí khi Gemini/Groq tạm gián đoạn</label>
@@ -261,6 +281,11 @@ function aiSettingsSection(){
  <div class="note">Chi phí ước tính tháng này — Claude: ${Number(data.claude_usage?.estimated_usd||0).toFixed(4)} USD (${Number(data.claude_usage?.calls||0)} lượt); OpenAI: ${Number(data.openai_usage?.estimated_usd||0).toFixed(4)} USD (${Number(data.openai_usage?.calls||0)} lượt).
  Chỉ thay đổi lựa chọn mô hình cho lượt gọi AI tiếp theo, không ảnh hưởng phiên đang xử lý.</div>
  </section>`;
+}
+function toggleIntegrationKey(id,button){
+ const input=document.getElementById(id);if(!input)return;
+ const reveal=input.type==='password';input.type=reveal?'text':'password';
+ button.textContent=reveal?'Ẩn':'Hiện';button.setAttribute('aria-pressed',String(reveal));
 }
 function updateFreeOnlyControls(){
  const form=$('#aiSettingsForm');if(!form)return;
