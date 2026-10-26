@@ -55,7 +55,17 @@ class CEOWorkerTests(unittest.TestCase):
         reports,steps=ceo.get_progress(self.db)
         self.assertIn("Báo cáo CEO",reports[mid]["report"])
         self.assertEqual(len(steps[mid]),4)  # 2 agents, progress + result
-        self.assertEqual(calls,["ceo","creative","compliance","ceo"])
+        self.assertEqual(calls,["ceo","creative","compliance",
+                                "creative","compliance","creative","ceo"])
+        from agent_forum import get_messages
+        logs=get_messages(self.db,mid)
+        kinds=[m["kind"] for m in logs]
+        self.assertIn("question",kinds)
+        self.assertIn("objection",kinds)
+        self.assertIn("revision",kinds)
+        self.assertEqual(logs[-1]["kind"],"decision")
+        self.assertEqual(logs[-1]["sender"],"ceo")
+        self.assertTrue(all(m["recipient"]!="owner" for m in logs))
         self.assertFalse(ceo.work_once(self.db,chat,dict))
 
     def test_ollama_failure_blocks_then_retry(self):
@@ -68,6 +78,9 @@ class CEOWorkerTests(unittest.TestCase):
         self.assertIn("Ollama",reports[mid]["error"])
         ceo.retry(self.db,mid)
         self.assertEqual(self.state(mid),"pending")
+        from agent_forum import get_messages
+        logs=get_messages(self.db,mid)
+        self.assertEqual(logs[-1]["kind"],"retry")
         with self.assertRaises(ValueError):
             ceo.retry(self.db,mid)
 
