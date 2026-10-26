@@ -236,10 +236,10 @@ function aiSettingsSection(){
  <div class="integration-key-helper">${cfg.groq_key_configured?'Đã lưu trong database SQLite mã hóa trên máy.':'Có thể kiểm tra trước khi lưu khóa.'}
  <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Lấy API key</a></div>
  <div class="integration-key-actions"><button type="button" class="small-btn" onclick="testConnection('groq')">✓ Kiểm tra Groq</button>
- <button type="button" class="small-btn" onclick="testGroqChat()">Thử trực tiếp GPT-OSS-20B</button>
+ <button type="button" class="small-btn" onclick="testGroqChat()">Thử như mã Python mẫu (GPT-OSS-120B)</button>
  <button type="button" class="small-btn" onclick="testGroqSavedCEO()">★ Kiểm tra khóa đã lưu + model AI CEO</button>
  ${cfg.groq_key_configured?'<button type="button" class="integration-danger" onclick="removeIntegrationSecret(\'groq\')">Xóa khóa</button>':''}</div>
- <p class="integration-key-helper">Kiểm tra Groq và thử GPT-OSS-20B có thể dùng khóa vừa dán (chưa lưu). Nút <strong>★ Kiểm tra khóa đã lưu + model AI CEO</strong> chỉ dùng khóa SQLite và model CEO đã lưu, giống đường xử lý nhiệm vụ. Hãy bấm Lưu cấu hình AI trước nếu vừa thay key. Các phép thử tạo văn bản dùng một ít token/quota.</p>
+ <p class="integration-key-helper">Kiểm tra Groq và thử như Python mẫu có thể dùng khóa vừa dán (chưa lưu). Nút <strong>★ Kiểm tra khóa đã lưu + model AI CEO</strong> chỉ dùng khóa SQLite và model CEO đã lưu, giống đường xử lý nhiệm vụ. Hãy bấm Lưu cấu hình AI trước nếu vừa thay key. Các phép thử tạo văn bản dùng một ít token/quota.</p>
  <div id="groqConnectionResult" class="integration-feedback" role="status" aria-live="polite" hidden></div>
  </article></div> <div class="integration-section-title"><span>BƯỚC 2</span><div><h3>Chọn chế độ vận hành</h3><p>Ưu tiên miễn phí, không tự gọi Claude/OpenAI tính phí.</p></div></div>
  <section class="integration-settings-area">
@@ -524,10 +524,10 @@ async function testConnection(target){
  }
 }
 async function testGroqChat(){
- if(!confirm('Thử gọi trực tiếp Groq GPT-OSS-20B bằng một câu rất ngắn? Phép thử tiêu thụ một ít token/quota API và có thể phát sinh phí nếu tài khoản Groq đang dùng gói trả phí.'))return;
+ if(!confirm('Thử gọi Groq GPT-OSS-120B giống mã Python đã chạy được, bằng một câu ngắn? Phép thử tiêu thụ một ít token/quota API và có thể phát sinh phí nếu tài khoản Groq đang dùng gói trả phí.'))return;
  const el=$('#groqConnectionResult');
  const typed=$('#aiSettingsForm input[name="groq_api_key"]')?.value?.trim()||'';
- if(el){el.hidden=false;el.classList.remove('error');el.textContent='Đang thử tạo câu trả lời bằng GPT-OSS-20B...';}
+ if(el){el.hidden=false;el.classList.remove('error');el.textContent='Đang gọi Groq SDK GPT-OSS-120B như mã Python mẫu...';}
  try{
   const result=await api('settings/groq/test-chat',{api_key:typed,confirm_token_use:true});
   const message='✓ '+(result.message||'Đã gọi Groq thành công')+
@@ -535,7 +535,7 @@ async function testGroqChat(){
   if(el)el.textContent=message;else toast(message);
  }catch(err){
   if(el){el.hidden=false;el.classList.add('error');el.textContent='✕ '+err.message;}
-  toast('Thử GPT-OSS-20B thất bại: '+err.message,true);
+  toast('Thử GPT-OSS-120B như Python mẫu thất bại: '+err.message,true);
  }
 }
 async function testGroqSavedCEO(){
