@@ -258,6 +258,14 @@ class Handler(BaseHTTPRequestHandler):
     result=integration_settings.save_telegram(body)
     return json_reply(self,{'ok':True,'settings':result,
         'message':'Đã lưu Bot Token và Telegram User ID trong phần mềm.'})
+   if path=='/api/settings/openai/remove-key':
+    return json_reply(self,{'ok':True,'settings':integration_settings.remove_openai_key(),
+           'message':'Đã xóa OpenAI API key và chuyển tất cả agent sang Ollama.'})
+   if path=='/api/settings/telegram/remove-token':
+    if telegram_manager.status()['running']:
+     raise ValueError('Hãy tắt Telegram Bot trước khi xóa token.')
+    return json_reply(self,{'ok':True,'settings':integration_settings.remove_telegram_token(),
+           'message':'Đã xóa Telegram Bot Token và tắt tự động chạy.'})
    if path=='/api/settings/openai/test':
     return json_reply(self,integration_settings.test_openai())
    if path=='/api/settings/telegram/test':
