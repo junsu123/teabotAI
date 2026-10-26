@@ -275,6 +275,13 @@ class Handler(BaseHTTPRequestHandler):
     if body.get('confirm_token_use') is not True:
      raise ValueError("Bạn phải đồng ý chạy phép thử tiêu thụ token trước khi tiếp tục.")
     return json_reply(self,integration_settings.test_groq_chat(key_override=body.get('api_key')))
+   if path=='/api/settings/groq/test-saved-agent':
+    if body.get('confirm_token_use') is not True:
+     raise ValueError("Cần xác nhận phép thử Groq dùng token trước khi tiếp tục.")
+    role=body.get('agent','ceo')
+    if not isinstance(role,str) or role not in integration_settings.VALID_AGENTS:
+     raise ValueError("Agent không hợp lệ")
+    return json_reply(self,integration_settings.test_saved_groq_agent(role))
    if path=='/api/settings/gemini/remove-key':
     return json_reply(self,{'ok':True,'settings':integration_settings.remove_gemini_key(),
       'message':'Đã xóa Gemini API key. Tuyến tự động vẫn có Groq dự phòng.'})
