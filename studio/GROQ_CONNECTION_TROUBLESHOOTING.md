@@ -1,5 +1,27 @@
 # Khắc phục lỗi không kết nối GroqCloud từ giao diện TEA AI
 
+## Khi Groq test key thành công nhưng AI CEO vẫn lỗi
+
+**Kiểm tra key đã nhập và key đang thực sự dùng là hai việc khác nhau.**
+Nút `Kiểm tra Groq` dùng khóa đang gõ trong ô nếu có, hoặc khóa trong database nếu ô trống.
+Nút `Thử trực tiếp GPT-OSS-20B` dùng GPT-OSS-20B; nhưng mặc định AI CEO chạy `openai/gpt-oss-120b`.
+
+Để xác định đúng nguyên nhân:
+
+1. Mở Cài đặt AI & Telegram → Gemini & các AI.
+2. Nếu vừa dán API key mới, **bấm Lưu cấu hình AI**.
+3. Nhấn **★ Kiểm tra khóa đã lưu + model AI CEO**. Nút này bắt buộc lấy khóa Groq từ database SQLite mã hóa, sử dụng chính model Groq đã chọn cho AI CEO (mặc định GPT-OSS-120B). Có tạo một câu trả lời ngắn, tiêu thụ token/quota; hệ thống hỏi xác nhận trước.
+4. Nếu phép thử này thành công, chọn lại nhà cung cấp cho CEO nếu cần: **Tự động** thử Gemini trước, rồi mới đến Groq nếu Gemini tạm lỗi; chọn **Chỉ Groq** mới bắt buộc CEO gọi Groq.
+5. Giao lại nhiệm vụ bị chặn bằng **Thử lại**, xem cột lỗi của nhiệm vụ / log phòng họp. Dòng lỗi ghi rõ `Groq/<model> · agent <vai trò>` nếu lỗi tại Groq.
+
+Đối với các model `openai/gpt-oss-*`, phần mềm hiện đặt `reasoning_effort=low` và `include_reasoning=false` theo hướng dẫn Groq, tăng ngân sách phản hồi vừa phải để tránh hết token dành cho câu trả lời thực tế.
+
+**Nếu chỉ test key nhập tay OK nhưng test khóa đã lưu lỗi:** gần như chắc chắn khóa trong database khác khóa vừa nhập, hoặc model AI CEO khác với model đang thử. Hãy lưu key và model trước khi kiểm tra lại.
+
+**Nếu nút test khóa đã lưu OK nhưng nhiệm vụ dài lỗi:** có thể do độ dài prompt, token/rate limit, bộ định tuyến Gemini/Groq, hoặc bước khác của nhiệm vụ. Gửi thông báo nguyên dòng lỗi mới, không gửi key hoặc dữ liệu khách hàng nhạy cảm.
+
+
+
 **Groq** (GroqCloud, API tại `api.groq.com`) và **Grok** (xAI, API tại `api.x.ai`) là hai dịch vụ khác nhau. Phần mềm TEA AI hiện tích hợp **GroqCloud** làm dự phòng sau Gemini, không sử dụng khóa API Grok của xAI.
 
 ## Cách kiểm tra sau khi cập nhật
