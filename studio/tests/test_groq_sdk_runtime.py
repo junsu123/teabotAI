@@ -55,7 +55,7 @@ class GroqSdkTests(unittest.TestCase):
         self.assertEqual(call[1]["model"],"openai/gpt-oss-120b")
         self.assertEqual(call[1]["messages"][1]["role"],"user")
         self.assertIn("Lập kế hoạch",call[1]["messages"][1]["content"])
-        self.assertIn("tiếng Việt",call[1]["messages"][0]["content"].lower())
+        self.assertIn("tiếng việt",call[1]["messages"][0]["content"].lower())
         self.assertEqual(call[1]["reasoning_effort"],"low")
         self.assertEqual(self.closed,1)
 
