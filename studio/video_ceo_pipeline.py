@@ -114,7 +114,7 @@ def process(db_path,task,chat,record_step,update_report,finish):
             return
 
         prompts=ask("creative","Phòng Video AI: 5 prompt riêng biệt cho Google Veo 3.",
-            "Bạn thuộc PHÒNG VIDEO AI. Dựa vào kịch bản ĐÃ KIỂM DUYỆT, "
+            "VEO3_5_SCENES_STRUCTURED. Bạn thuộc PHÒNG VIDEO AI. Dựa vào kịch bản ĐÃ KIỂM DUYỆT, "
             "tạo 5 prompt Veo 3 cho 5 cảnh, mỗi cảnh đúng 8 giây. "
             "Không nói đã render video. 5 prompt phải độc lập, có thể sao chép "
             "vào Veo 3 để tạo từng cảnh rồi ghép thành 40 giây. "
