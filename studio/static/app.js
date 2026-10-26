@@ -3,7 +3,7 @@ const h = x => String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':
 const $ = s => document.querySelector(s);
 let data={agents:[],accounts:[],jobs:[],missions:[],learnings:[],products:{},proxies:[],training:[],stats:{}}, activeView='hq', focusAgent=null, sceneScale=1, sceneMode='mars';
 let forumMissionId=0,forumData=null,forumBusy=false;
-const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt AI & Telegram',dom:'Học đăng bài'};
+const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',video:'Phòng TikTok & Video AI',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt AI & Telegram',dom:'Học đăng bài'};
 async function api(endpoint, body=null){
  const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:endpoint.endsWith('/test-saved-agent')?55000:endpoint.endsWith('/test-chat')?30000:endpoint.endsWith('/test')?20000:12000);
  const opts=body===null?{signal:ctrl.signal}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal};
@@ -100,6 +100,42 @@ function home(){const s=data.stats,ms=data.missions.slice(0,4);return `
 function organigram(){return `<div style="padding:23px;display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:23px;background:radial-gradient(ellipse at center,#1a4050,#09182e)"><div style="border:1px solid #54c5b5;padding:14px 34px;border-radius:13px;background:#164050">👑 <b>AI CEO</b></div><div style="height:20px;width:1px;background:#5fd6c4"></div><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;width:100%">${data.agents.filter(a=>a.id!=='ceo').map(a=>`<button class="small-btn" style="padding:17px;border-color:${a.color};text-align:center" onclick="openAgent('${a.id}')">${a.emoji}<br><b>${a.name}</b><br><small>${a.role}</small></button>`).join('')}</div></div>`}
 function zoom(by){sceneScale=Math.max(.65,Math.min(1.6,sceneScale+by));if($('#marsSvg'))$('#marsSvg').style.transform=`scale(${sceneScale})`}
 function agentsView(){return `${pageHead('♟ TEAM MANAGEMENT','Nhân viên <span class="gradient-text">AI</span>','Phòng ban chỉ nhận việc qua AI CEO; bạn không giao việc trực tiếp.',eButton('👑 Giao việc cho CEO','onclick="showMissionForm()"'))}<div class="agents-cards">${data.agents.map(a=>`<div class="agent-card" onclick="openAgent('${a.id}')"><div class="portrait" style="background:${a.color}22;border:1px solid ${a.color}66">${a.emoji}</div><h3>${a.name}</h3><p>${a.role}</p><div class="bottom"><span>● Cấu hình sẵn</span><span>Xem nhiệm vụ ↗</span></div></div>`).join('')}</div><div class="note" style="margin-top:20px">Các agent là những vai trò logic trong phần mềm. Để xử lý AI thực sự, bạn phải cài Ollama và cấu hình workflow trong mã nguồn Python; trạng thái này không có nghĩa AI đang chạy nền.</div>`}
+function videoRoomView(){
+ const results=data.video_productions||[];
+ const stages={research_pending:'Chờ nghiên cứu TikTok',research_complete:'Đã nghiên cứu',script_complete:'Đã soạn kịch bản',
+ needs_review:'Chờ kiểm duyệt/chỉnh sửa',awaiting_video_render:'Đã chuyển Phòng Video AI',blocked:'Tạm dừng do lỗi'};
+ return `${pageHead('▧ VIDEO WORKFLOW','Phòng <span class="gradient-text">TikTok & Video AI</span>',
+  'AI CEO điều phối nghiên cứu tham chiếu → viết kịch bản → kiểm duyệt → chuẩn bị storyboard. Chưa tự render hoặc đăng MP4.',
+  eButton('👑 Giao brief sản phẩm','onclick="showMissionForm()"'))}
+ <div class="video-flow"><span>🔎 Nghiên cứu TikTok</span><b>→</b><span>✍️ Biên kịch</span><b>→</b><span>🛡️ Kiểm duyệt</span><b>→</b><span>🎬 Phòng Video AI</span></div>
+ ${results.length?results.map(v=>{
+ const brief=(data.video_briefs||{})[v.mission_id]||{};
+ const badges=(brief.assets||[]).map(a=>`<a href="/api/mission-asset?mission_id=${v.mission_id}&asset_id=${a.id}" target="_blank" rel="noopener noreferrer">${a.kind==='image3d'?'🖼️ Ảnh 3D':'📄 Hồ sơ công bố'}: ${h(a.filename)}</a>`).join(' · ');
+ return `<article class="panel padded video-work-card">
+ <div class="video-work-top"><div><div class="eyebrow">NHIỆM VỤ #${v.mission_id}</div><h3>${h(v.product_name)}</h3></div><span class="video-stage">${h(stages[v.status]||v.status)}</span></div>
+ <div class="tagline">Thành phần: ${h(brief.ingredients||'Chưa cung cấp')}</div>
+ <div class="video-asset-links">${badges||'Không có tệp đính kèm'}</div>
+ <div class="video-card-actions"><button class="small-btn" onclick="showVideoRoomDetail(${v.mission_id})">Xem nghiên cứu · Kịch bản · Storyboard</button>
+ <button class="small-btn" onclick="showCEOReport(${v.mission_id})">Báo cáo CEO</button></div>
+ </article>`;}).join(''):empty('🎬','Chưa có dự án video','Giao brief sản phẩm cho AI CEO để khởi chạy quy trình.')}
+ <div class="note">Các URL TikTok chỉ được lưu làm tham chiếu. Nghiên cứu nội dung cần ghi chú hoặc transcript mà chủ cung cấp; hệ thống không tự truy cập video riêng tư. Giấy công bố chưa được xác nhận pháp lý chỉ là tư liệu tham khảo.</div>`;
+}
+function showVideoRoomDetail(id){
+ const v=(data.video_productions||[]).find(x=>x.mission_id===id);
+ if(!v)return;
+ const brief=(data.video_briefs||{})[id]||{};
+ const status=v.status==='awaiting_video_render'?'Sẵn sàng đưa vào công cụ tạo video sau khi chủ duyệt':
+  v.status==='needs_review'?'Tạm dừng: cần kiểm duyệt/chỉnh sửa':'Đang trong quy trình';
+ const part=(title,txt)=>`<details class="video-detail-section"><summary>${title}</summary><pre>${h(txt||'Chưa có kết quả')}</pre></details>`;
+ openModal(`<div class="eyebrow">VIDEO AI • DỰ ÁN #${id}</div><h2>${h(v.product_name)}</h2>
+ <div class="note">${h(status)}</div>
+ ${part('🔎 Nghiên cứu TikTok',v.research)}
+ ${part('✍️ Kịch bản bán hàng',v.script)}
+ ${part('🛡️ Kiểm duyệt',v.compliance)}
+ ${part('🎬 Gói storyboard gửi Phòng Video AI',v.storyboard)}
+ <div class="note">Không có MP4 render tự động. Cần kết nối công cụ video và chủ doanh nghiệp duyệt trước khi xuất bản.</div>
+ <button class="small-btn" onclick="closeModal();showCEOReport(${id})">Xem báo cáo CEO</button>`);
+}
 function missionsView(){const ms=data.missions;return `${pageHead('👑 CEO COMMAND CENTER','Nhiệm vụ <span class="gradient-text">AI CEO</span>','Bạn chỉ giao việc cho CEO. CEO phân công nội bộ, cập nhật tiến độ và báo cáo trực tiếp cho bạn.',eButton('👑 Giao nhiệm vụ CEO','onclick="showMissionForm()"'))}<section class="panel"><div class="table-wrap">${ms.length?`<table class="data-table"><thead><tr><th>Mã</th><th>Nhiệm vụ</th><th>Đầu mối</th><th>Trạng thái</th><th>Ngày tạo</th><th>Báo cáo</th></tr></thead><tbody>${ms.map(m=>`<tr><td>#${m.id}</td><td><strong>${h(m.title)}</strong><div class="tagline">${h(m.detail).slice(0,90)}</div></td><td>👑 AI CEO</td><td>${tag(m.status)}${m.ceo_error?`<div class="tagline" style="max-width:230px;color:#ffad9b">${h(m.ceo_error).slice(0,150)}</div>`:''}</td><td>${fmtDate(m.created_at)}</td><td><div class="inline-actions"><button class="small-btn" onclick="showCEOReport(${m.id})">Xem tiến độ / báo cáo</button><button class="small-btn" onclick="openForum(${m.id})">◉ Xem log tranh luận</button>${m.status==='blocked'?`<button class="small-btn" onclick="retryCEOTask(${m.id})">↻ Thử lại</button>`:''}</div></td></tr>`).join('')}</tbody></table>`:empty('👑','Chưa có nhiệm vụ','Hãy giao nhiệm vụ đầu tiên cho AI CEO.')}</div></section><div class="panel padded" style="margin-top:16px"><h3>🧠 Bộ não AI theo vị trí – Ngôn ngữ tiếng Việt</h3>
 <div class="note">Các agent đặt chế độ TỰ ĐỘNG sẽ ưu tiên Gemini, sau đó Groq. Claude/OpenAI chỉ được dự phòng khi bạn cho phép; Ollama là phương án cuối.</div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0">
@@ -565,9 +601,89 @@ async function controlTelegram(action){
 function domView(){const ss=data.training||[];const isActive=ss.some(s=>['starting','recording','saving'].includes(s.status));return `${pageHead('◉ BROWSER LEARNING','Học thao tác <span class="gradient-text">đăng sản phẩm</span>','Bấm bắt đầu trong phần mềm → làm mẫu trên trình duyệt → bấm dừng để lưu DOM và các bước.',eButton('◉ Bắt đầu học','onclick="showTrainForm()"'))}
  <div class="two-cols"><section class="panel"><div class="panel-head"><h3>Các phiên học thao tác</h3><small>${ss.length} phiên</small></div><div class="table-wrap">${ss.length?`<table class="data-table"><thead><tr><th>Profile</th><th>Nguồn</th><th>Trạng thái</th><th>Số thao tác</th><th>Điều khiển</th></tr></thead><tbody>${ss.map(x=>`<tr><td><strong>${h(x.account_id)}</strong><div class="tagline">${h(x.mode)}</div></td><td>${tag(x.target)}</td><td>${tag(x.status)}<div class="tagline">${h(x.message||'')}</div></td><td>${x.events_count||0}</td><td><div class="inline-actions">${['starting','recording'].includes(x.status)?`<button class="small-btn stop-btn" onclick="stopTraining('${x.id}')">■ Dừng & lưu</button>`:''}<button class="small-btn" onclick="showTrainingDetail('${x.id}')">Xem dữ liệu</button></div></td></tr>`).join('')}</tbody></table>`:empty('⌘','Chưa có phiên học','Nhấn Bắt đầu học để mở trang mẫu và ghi thao tác thủ công.')}</div></section>
  <section class="panel padded"><h3>🖱 Học bằng nút bấm</h3>${[['1','Chọn gian hàng','Chọn profile Chrome và loại công việc tạo mới/cập nhật.'],['2','Bấm Bắt đầu học','Phần mềm mở trình duyệt theo profile bạn đã đăng nhập.'],['3','Bạn thao tác mẫu','Bấm vào form, nhập dữ liệu, chọn ảnh như bình thường.'],['4','Bấm Dừng & lưu','AI lưu thẻ input/textarea/select, label và chuỗi tương tác để bạn kiểm tra.']].map(x=>`<div class="info-row"><span class="ic">${x[0]}</span><div><strong>${x[1]}</strong><p>${x[2]}</p></div></div>`).join('')}<div class="note warning" style="margin-top:15px">Mặc định học trên form demo nội bộ. Chỉ chọn Seller Center khi bạn có quyền sử dụng công cụ ghi thao tác theo điều khoản nền tảng. Không thu dữ liệu đã nhập, mật khẩu, OTP hoặc cookie. Không tự bấm đăng.</div></section></div>`}
-function render(){document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===activeView));$('#breadcrumb').textContent=labels[activeView];const views={hq:home,agents:agentsView,missions:missionsView,forum:forumView,settings:settingsView,shops:shopsView,proxies:proxiesView,products:productsView,jobs:jobsView,memory:memoryView,telegram:telegramView,dom:domView};$('#mainContent').innerHTML=(views[activeView]||home)();if(activeView==='hq'&&sceneMode==='mars'){if($('#marsSvg'))$('#marsSvg').style.transform=`scale(${sceneScale})`;document.querySelectorAll('.room').forEach(el=>{el.addEventListener('click',()=>el.dataset.agent?openAgent(el.dataset.agent):navigate(el.dataset.view));el.addEventListener('keydown',e=>{if(e.key==='Enter')el.click()})})}}
+function render(){document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===activeView));$('#breadcrumb').textContent=labels[activeView];const views={hq:home,agents:agentsView,missions:missionsView,forum:forumView,video:videoRoomView,settings:settingsView,shops:shopsView,proxies:proxiesView,products:productsView,jobs:jobsView,memory:memoryView,telegram:telegramView,dom:domView};$('#mainContent').innerHTML=(views[activeView]||home)();if(activeView==='hq'&&sceneMode==='mars'){if($('#marsSvg'))$('#marsSvg').style.transform=`scale(${sceneScale})`;document.querySelectorAll('.room').forEach(el=>{el.addEventListener('click',()=>el.dataset.agent?openAgent(el.dataset.agent):navigate(el.dataset.view));el.addEventListener('keydown',e=>{if(e.key==='Enter')el.click()})})}}
 function openAgent(id){const a=data.agents.find(x=>x.id===id);if(!a)return;const ms=data.missions.filter(m=>m.agent_id===id);openModal(`<div class="eyebrow">PHÒNG BAN AI – CHỈ XEM</div><div style="font-size:43px;margin:14px 0">${a.emoji}</div><h2>${a.name}</h2><p class="sub">${a.room} • ${a.role}</p><div class="note">Bạn chỉ giao nhiệm vụ cho AI CEO. ${a.id==='ceo'?'AI CEO tiếp nhận và điều phối toàn bộ công việc.':'Đây là phòng ban nội bộ, nhận việc qua AI CEO khi chức năng điều phối được kích hoạt.'}</div><h3 style="margin-top:24px">Nhiệm vụ liên quan (${ms.length})</h3>${ms.length?ms.slice(0,4).map((m,i)=>miniTaskRow(m,i)).join(''):'<div class="empty-sm">Chưa có nhiệm vụ trong hàng đợi</div>'}<button class="primary-btn" style="margin-top:20px" onclick="closeModal();showMissionForm()">👑 Giao việc cho AI CEO</button>`)}
-function showMissionForm(){openModal(`<div class="eyebrow">CEO COMMAND CENTER</div><h2>Giao nhiệm vụ cho AI CEO</h2><p class="sub">Bạn chỉ trao đổi với AI CEO. CEO sẽ phân tích, lập kế hoạch, phân công cho các phòng ban và báo cáo về cho bạn khi quy trình điều phối AI được kết nối.</p><form id="missionForm"><input type="hidden" name="agent_id" value="ceo"><div class="note">👑 Người tiếp nhận duy nhất: <b>AI CEO</b></div><div class="field"><label>Tiêu đề nhiệm vụ</label><input name="title" required minlength="3" placeholder="Ví dụ: Phân tích kế hoạch bán trà đinh lăng" maxlength="150"></div><div class="field"><label>Yêu cầu chi tiết</label><textarea name="detail" maxlength="2000" placeholder="Mục tiêu, sản phẩm, nền tảng, thời hạn..."></textarea></div><div class="form-bottom"><button class="primary-btn">Gửi nhiệm vụ cho CEO</button><span class="hint">Hiện chỉ lưu vào hàng đợi; CEO tự điều phối chưa được kích hoạt.</span></div></form>`);$('#missionForm').addEventListener('submit',async e=>{e.preventDefault();await submitForm('missions',e.target)})}
+function showMissionForm(){
+ openModal('<div class="eyebrow">CEO COMMAND CENTER</div><h2>Giao nhiệm vụ cho AI CEO</h2>'+
+ '<p class="sub">Chủ doanh nghiệp chỉ giao việc cho AI CEO. Từ hồ sơ sản phẩm, CEO điều phối phòng nghiên cứu TikTok, biên kịch, kiểm duyệt và bàn giao sang Phòng Video AI.</p>'+
+ '<form id="missionForm"><input type="hidden" name="agent_id" value="ceo">'+
+ '<div class="note">👑 Người tiếp nhận duy nhất: AI CEO · không tự đăng video hoặc tạo MP4 khi chưa tích hợp công cụ render.</div>'+
+ '<div class="field"><label>Loại nhiệm vụ</label><select name="workflow" id="missionWorkflow" onchange="toggleMissionWorkflow()">'+
+ '<option value="tiktok_video" selected>🔎 Nghiên cứu TikTok → kịch bản → Phòng Video AI</option>'+
+ '<option value="">Nhiệm vụ CEO thông thường</option></select></div>'+
+ '<div class="field"><label>Tiêu đề nhiệm vụ</label><input name="title" required minlength="3" maxlength="150" placeholder="Ví dụ: Lập 3 video bán trà thảo mộc"></div>'+
+ '<div class="field"><label>Yêu cầu chi tiết</label><textarea name="detail" maxlength="2000" rows="3" placeholder="Phong cách video, khách hàng mục tiêu, thông điệp, tỷ lệ khung hình..."></textarea></div>'+
+ '<section id="videoMissionFields" class="video-form-fields">'+
+ '<div class="video-form-grid">'+
+ '<div class="field"><label>Tên sản phẩm *</label><input name="product_name" maxlength="180" required placeholder="Trà thảo mộc..."></div>'+
+ '<div class="field"><label>Thành phần sản phẩm *</label><textarea name="ingredients" maxlength="2500" rows="3" required placeholder="Ghi chính xác theo nhãn sản phẩm"></textarea></div></div>'+
+ '<div class="video-form-grid">'+
+ '<div class="field"><label>Ảnh sản phẩm 3D (PNG/JPG/WebP, tối đa 8MB)</label><input name="image3d" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"><small>Ảnh chỉ làm tham chiếu; không được tự đổi chữ, màu, thiết kế bao bì.</small></div>'+
+ '<div class="field"><label>Giấy tờ công bố sản phẩm (PDF/PNG/JPG/WebP, tối đa 12MB)</label><input name="disclosure_file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"><small>Tài liệu được lưu cục bộ. PDF có thể trích chữ nhưng cần kiểm chứng; ảnh/scan cần xem thủ công.</small></div></div>'+
+ '<div class="field"><label>Link video TikTok tham khảo (mỗi dòng một link, tối đa 8)</label><textarea name="tiktok_urls" rows="3" placeholder="https://www.tiktok.com/@.../video/..."></textarea></div>'+
+ '<div class="field"><label>Ghi chú nội dung video / transcript do bạn cung cấp</label><textarea name="research_notes" maxlength="4200" rows="3" placeholder="Ghi hook mở đầu, cách quay, lời thoại, phản ứng người xem..."></textarea><small>Phần mềm không tự tải/xem nội dung video TikTok từ URL. Link chỉ là tài liệu tham chiếu đến khi có bản ghi/transcript.</small></div></section>'+
+ '<div class="form-bottom"><button class="primary-btn" id="submitMissionButton" type="submit">👑 Gửi nhiệm vụ cho CEO</button><span class="hint" id="missionUploadStatus">AI CEO sẽ nghiên cứu, viết kịch bản, kiểm duyệt rồi bàn giao storyboard (chưa render MP4).</span></div></form>');
+ $('#missionForm').addEventListener('submit',submitCEOMission);
+}
+function toggleMissionWorkflow(){
+ const on=$('#missionWorkflow')?.value==='tiktok_video';
+ const panel=$('#videoMissionFields');if(!panel)return;
+ panel.hidden=!on;
+ panel.querySelectorAll('[name="product_name"],[name="ingredients"]').forEach(el=>el.required=on);
+}
+function fileAsBase64(file,limit,kind){
+ if(!file)return Promise.resolve(null);
+ if(file.size>limit)throw Error(kind+' vượt dung lượng cho phép');
+ return new Promise((resolve,reject)=>{
+  const reader=new FileReader();
+  reader.onerror=()=>reject(Error('Không thể đọc tệp '+kind));
+  reader.onload=()=>{
+   const s=String(reader.result||'');
+   const base64=s.includes(',')?s.slice(s.indexOf(',')+1):'';
+   resolve({name:file.name,type:file.type,base64});
+  };
+  reader.readAsDataURL(file);
+ });
+}
+async function submitCEOMission(event){
+ event.preventDefault();
+ const form=event.currentTarget, fd=new FormData(form);
+ const video=fd.get('workflow')==='tiktok_video';
+ const b=$('#submitMissionButton'),msg=$('#missionUploadStatus');
+ b.disabled=true;b.textContent='Đang lưu nhiệm vụ...';
+ try{
+  const payload={agent_id:'ceo',title:String(fd.get('title')||''),
+    detail:String(fd.get('detail')||''),workflow:video?'tiktok_video':''};
+  if(video){
+   payload.product_name=String(fd.get('product_name')||'');
+   payload.ingredients=String(fd.get('ingredients')||'');
+   payload.tiktok_urls=String(fd.get('tiktok_urls')||'');
+   payload.research_notes=String(fd.get('research_notes')||'');
+   const image=fd.get('image3d'),paper=fd.get('disclosure_file');
+   if(image instanceof File&&image.name)
+    payload.image3d=await fileAsBase64(image,8*1024*1024,'Ảnh sản phẩm');
+   if(paper instanceof File&&paper.name)
+    payload.disclosure_file=await fileAsBase64(paper,12*1024*1024,'Giấy công bố');
+  }
+  if(msg)msg.textContent='Đang chuyển hồ sơ sản phẩm vào database cục bộ...';
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),90000);
+  let response;
+  try{
+   response=await fetch('/api/missions',{method:'POST',
+    headers:{'Content-Type':'application/json'},credentials:'same-origin',
+    body:JSON.stringify(payload),signal:ctrl.signal});
+  }finally{clearTimeout(timer)}
+  const result=await response.json();
+  if(!response.ok||!result.ok)throw Error(result.error||'Không thể lưu nhiệm vụ');
+  closeModal();
+  toast('Đã gửi hồ sơ cho CEO. Phòng nghiên cứu và Phòng Video AI sẽ hiển thị trạng thái.');
+  await refresh();
+ }catch(err){
+  if(msg)msg.textContent='Lỗi: '+(err.name==='AbortError'?'Quá thời gian tải lên':err.message);
+  toast('Không lưu được hồ sơ: '+err.message,true);
+ }finally{b.disabled=false;b.textContent='👑 Gửi nhiệm vụ cho CEO';}
+}
 function showCEOReport(id){
  const m=data.missions.find(x=>x.id===id);
  if(!m)return;
@@ -626,7 +742,7 @@ async function approveJob(id){if(!confirm(`Duyệt nhiệm vụ #${id}? Phải c
 async function rejectJob(id){if(!confirm(`Từ chối nhiệm vụ #${id}?`))return;try{await api('jobs/reject',{id});toast('Đã từ chối');await refresh()}catch(e){toast(e.message,true)}}
 function copyText(t){if(navigator.clipboard?.writeText)navigator.clipboard.writeText(t).then(()=>toast('Đã sao chép')).catch(()=>toast('Không thể sao chép',true));else toast('Trình duyệt chưa hỗ trợ sao chép',true)}
 $('#nav').addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)navigate(b.dataset.view)});$('#refreshBtn').addEventListener('click',refresh);$('#closeModal').addEventListener('click',closeModal);$('#modalBackdrop').addEventListener('click',e=>{if(e.target.id==='modalBackdrop')closeModal()});window.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
-setInterval(()=>{if(['dom','missions','hq','shops'].includes(activeView)&&$('#modalBackdrop')?.hidden&&document.visibilityState==='visible')refresh()},9000);
+setInterval(()=>{if(['dom','missions','video','hq','shops'].includes(activeView)&&$('#modalBackdrop')?.hidden&&document.visibilityState==='visible')refresh()},9000);
 setInterval(()=>{if(activeView==='forum'&&document.visibilityState==='visible')loadForum()},6500);
 setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})},1000);
 refresh();
