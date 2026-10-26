@@ -3,7 +3,7 @@ const h = x => String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':
 const $ = s => document.querySelector(s);
 let data={agents:[],accounts:[],jobs:[],missions:[],learnings:[],products:{},proxies:[],training:[],stats:{}}, activeView='hq', focusAgent=null, sceneScale=1, sceneMode='mars';
 let forumMissionId=0,forumData=null,forumBusy=false;
-const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',video:'Phòng TikTok & Video AI',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt AI & Telegram',dom:'Học đăng bài'};
+const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',video:'Xưởng SEO & Veo 3',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt AI & Telegram',dom:'Học đăng bài'};
 async function api(endpoint, body=null){
  const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:endpoint.endsWith('/test-saved-agent')?55000:endpoint.endsWith('/test-chat')?30000:endpoint.endsWith('/test')?20000:12000);
  const opts=body===null?{signal:ctrl.signal}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal};
@@ -87,9 +87,11 @@ function drawMap(){
 }
 const miniTaskRow=(t,i)=>`<div class="mini-task"><span class="number-dot">${i+1}</span><div class="txt"><b>${h(t.title)}</b><small>${t.agent_id==='ceo'?'👑 AI CEO':'Lịch sử cũ: '+h(t.agent_id)} • ${fmtDate(t.created_at)}</small></div><span class="tag ${t.status==='done'?'done':''}">${h(t.status)}</span></div>`;
 function home(){const s=data.stats,ms=data.missions.slice(0,4);return `
- ${pageHead('◈ MARS OPERATIONS','Trụ sở <span class="gradient-text">TEA AI Company</span>','Một trụ sở ảo cho toàn bộ đội AI marketing trà túi lọc.',eButton('👑 Giao việc cho CEO','onclick="showMissionForm()"'))}
+ ${pageHead('◈ MARS OPERATIONS','Trụ sở <span class="gradient-text">TEA AI Company</span>','Tập trung tạo tiêu đề SEO, mô tả SEO, phân tích giá, kịch bản 40 giây và 5 prompt Veo 3 cho từng sản phẩm.',eButton('👑 Giao việc cho CEO','onclick="showMissionForm()"'))}
+ <div class="video-flow"><span>🏷 Tiêu đề & Mô tả SEO</span><b>→</b><span>💰 Giá bán lẻ</span><b>→</b><span>🎞 Kịch bản 40s</span><b>→</b><span>🎬 5 prompt Veo 3</span>
+ <button class="small-btn" onclick="navigate('video')">Mở xưởng nội dung</button></div>
  <div class="metrics">
-  ${[['♟','Nhân viên AI',s.agents||6,'Đã cấu hình'],['▣','Tài khoản shop',s.shops||0,'Profile riêng từng shop'],['◫','Nhiệm vụ đăng',s.jobs_open||0,'Đang xử lý / chờ duyệt'],['✧','Bài học đã lưu',s.lessons||0,'Kho ký ức dùng chung']].map(x=>`<div class="metric"><span class="metric-icon">${x[0]}</span><div class="metric-label">${x[1]}</div><div class="metric-value">${x[2]}</div><div class="metric-caption">${x[3]}</div></div>`).join('')}
+  ${[['♟','Nhân viên AI',s.agents||6,'CEO điều phối'],['🏷','Bộ nội dung',(data.commerce_outputs||[]).length,'Sản phẩm đã giao'],['🎬','Bộ Veo 3 đủ 5',(data.commerce_outputs||[]).filter(v=>v.veo_prompts).length,'Cảnh 8 giây'],['◫','Nhiệm vụ CEO',(data.missions||[]).length,'Tất cả nhiệm vụ']].map(x=>`<div class="metric"><span class="metric-icon">${x[0]}</span><div class="metric-label">${x[1]}</div><div class="metric-value">${x[2]}</div><div class="metric-caption">${x[3]}</div></div>`).join('')}
  </div>
  <div class="hq-grid"><section class="panel"><div class="panel-head"><div><h3>✦ Toàn cảnh trụ sở Sao Hỏa</h3><div class="sublabel">Nhấn vào tòa nhà để xem phòng ban; mọi lệnh đều gửi qua CEO</div></div><div class="map-tabs"><button class="${sceneMode==='mars'?'active':''}" onclick="sceneMode='mars';render()">Sao Hỏa</button><button class="${sceneMode==='plan'?'active':''}" onclick="sceneMode='plan';render()">Sơ đồ</button></div></div>
  <div class="map-container" id="sceneWrap">${sceneMode==='mars'?drawMap():organigram()}</div><div class="map-footer"><div class="legend"><span>Điều hành / dữ liệu</span><span>Sáng tạo</span><span>Nghiên cứu</span></div><div class="zoom"><button onclick="zoom(-0.1)">−</button><button onclick="sceneScale=1;zoom(0)">⌖</button><button onclick="zoom(0.1)">+</button></div></div></section>
