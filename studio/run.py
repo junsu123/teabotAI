@@ -24,6 +24,7 @@ STATIC=ROOT/'static'
 LEGACY=ROOT.parent/'legacy'/'tea_ai_local'
 sys.path.insert(0,str(LEGACY))
 import shop_profiles
+import session_monitor
 import browser_listing
 import proxy_store
 import ceo_engine
@@ -39,6 +40,8 @@ DB=DATA/'studio.sqlite3'
 MAX_JSON=1024*1024
 TRAIN_DIR=DATA/"training"
 LEARN_PROCS={}
+SESSION_CHECKS={}
+SESSION_CHECKS_LOCK=threading.Lock()
 DATA.mkdir(exist_ok=True)
 AGENTS=[
  {'id':'ceo','name':'AI CEO','role':'Cổng nhận nhiệm vụ duy nhất','emoji':'👑','room':'Phòng Founder','color':'#48c4ae'},
@@ -82,7 +85,9 @@ def list_accounts():
  return [{ 'id':key, 'name': a['alias'], 'platform': a['platform'],
    'browser': a['browser'], 'proxy': ((a.get('proxy') or {}).get('server') or ''),
    'proxy_env_prefix': ((a.get('proxy') or {}).get('env_prefix') or ''), 'proxy_id':a.get('proxy_id',''),
-   'profile_dir': str(shop_profiles.PROFILES/key), 'status':'chưa kiểm tra phiên'}
+   'profile_dir': str(shop_profiles.PROFILES/key),
+   'session': session_monitor.read_status(shop_profiles.PROFILES/key),
+   'profile_open': (shop_profiles.PROFILES/key/'.tea_ai_in_use').exists()}
    for key,a in registry.items()]
 
 def list_jobs():
@@ -246,6 +251,28 @@ class Handler(BaseHTTPRequestHandler):
      else:command=[terminal,'-e',*command]
     subprocess.Popen(command,cwd=str(LEGACY),creationflags=flags,env={**os.environ,**proxy_store.account_env(aid)})
     return json_reply(self,{'ok':True,'message':'Đã yêu cầu mở profile; đăng nhập thủ công nếu cần'})
+   if path=='/api/accounts/check-session':
+    aid=sanitize(body.get('account_id',''),40)
+    shop_profiles.get_account(aid)
+    folder=shop_profiles.PROFILES/aid
+    if (folder/'.tea_ai_in_use').exists():
+     return json_reply(self,{'ok':True,'mode':'live_monitor','session':session_monitor.read_status(folder),
+                  'message':'Chrome profile đang mở; trạng thái được kiểm tra tự động định kỳ.'})
+    with SESSION_CHECKS_LOCK:
+     task=SESSION_CHECKS.get(aid)
+     if task is not None and task.is_alive():
+      return json_reply(self,{'ok':True,'mode':'checking','message':'Đang kiểm tra phiên đăng nhập.'})
+     session_monitor.write_status(folder,'checking',0,'Đang mở Chrome để kiểm tra trạng thái...')
+     def check_worker():
+      try:
+       shop_profiles.check_account_once(aid)
+      except Exception as exc:
+       session_monitor.write_status(folder,'error',0,
+                     f'Không thể kiểm tra profile: {type(exc).__name__}')
+     task=threading.Thread(target=check_worker,name='shop-session-'+aid,daemon=True)
+     SESSION_CHECKS[aid]=task
+     task.start()
+    return json_reply(self,{'ok':True,'mode':'checking','message':'Đang kiểm tra phiên đăng nhập; trang sẽ tự cập nhật.'})
    if path=='/api/proxies':
     pid=sanitize(body.get('id',''),40)
     p=proxy_store.save_proxy(pid,sanitize(body.get('name',''),100),body.get('scheme','http'),
