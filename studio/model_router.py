@@ -187,7 +187,17 @@ def _call_provider(provider,agent,prompt,local_chat,db_file,env,transport=None):
             model=env.get("TEA_GEMINI_MODEL_"+agent.upper(),cloud.GEMINI_DEFAULT[agent])
             return cloud.gemini_chat(agent,prompt,key=key,model=model,transport=transport)
         model=env.get("TEA_GROQ_MODEL_"+agent.upper(),cloud.GROQ_DEFAULT[agent])
-        return cloud.groq_chat(agent,prompt,key=key,model=model,transport=transport)
+        try:
+            return cloud.groq_chat(agent,prompt,key=key,model=model,transport=transport)
+        except Exception as error:
+            # Include the selected provider/model in task error and meeting log;
+            # never attach raw API keys, prompts, request headers or payloads.
+            if isinstance(error,cloud.TemporaryProviderError):
+                raise cloud.TemporaryProviderError(
+                    "Groq/"+model+" · agent "+agent+": "+str(error)) from None
+            if isinstance(error,(RuntimeError,ValueError)):
+                raise RuntimeError("Groq/"+model+" · agent "+agent+": "+str(error)) from None
+            raise
     if provider=="claude":
         import claude_provider
         model=env.get("TEA_CLAUDE_MODEL_"+agent.upper(),claude_provider.DEFAULT_MODELS[agent])
