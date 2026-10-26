@@ -397,6 +397,25 @@ def test_groq(http=None, key_override=None):
         key=_get(GROQ_SECRET)
     return call_test(key,transport=http)
 
+def test_saved_groq_agent(agent="ceo",http=None):
+    """Diagnostic uses exactly the saved Groq key and the agent's model.
+
+    Never accept a pasted API key here: this test is intended to identify
+    mismatches between newly typed keys and what runtime actually uses.
+    """
+    from free_cloud_providers import test_saved_groq_agent as call_test
+    if agent not in VALID_AGENTS:
+        raise ValueError("Agent AI không hợp lệ")
+    key=_get(GROQ_SECRET)
+    if not key:
+        raise ValueError("Chưa lưu Groq API key trong database. Hãy bấm Lưu cấu hình AI trước.")
+    cfg=read()
+    model=cfg["groq_models"].get(agent,GROQ_DEFAULT[agent])
+    result=call_test(key,agent,model,transport=http)
+    result["key_source"]="encrypted_sqlite"
+    return result
+
+
 def test_groq_chat(http=None,key_override=None):
     """Live test is user-initiated only and uses the same key as the list test."""
     from free_cloud_providers import test_groq_chat as call_test
