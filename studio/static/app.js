@@ -216,7 +216,8 @@ function openaiSettingsSection(){
  <div class="note">Khuyên dùng: bật OpenAI cho CEO trước. API ChatGPT được tính phí riêng với gói ChatGPT Plus. Thay đổi có hiệu lực ở nhiệm vụ tiếp theo.</div>
  <div class="form-bottom" style="display:flex;gap:10px;flex-wrap:wrap">
  <button class="primary-btn" type="submit">Lưu cấu hình ChatGPT</button>
- <button class="small-btn" type="button" onclick="testConnection('openai')">✓ Kiểm tra API key</button></div></form>
+ <button class="small-btn" type="button" onclick="testConnection('openai')">✓ Kiểm tra API key</button>
+ <button class="small-btn" type="button" onclick="removeIntegrationSecret('openai')" ${cfg.openai_key_configured?'':'disabled'}>Xóa API key đã lưu</button></div></form>
  <div class="tagline" style="margin-top:12px">Chi phí OpenAI ước tính trong tháng: ${Number(data.openai_usage?.estimated_usd||0).toFixed(4)} USD • ${Number(data.openai_usage?.calls||0)} lượt gọi.</div>
  </section>`;
 }
@@ -238,7 +239,8 @@ function telegramSettingsSection(){
  <button class="primary-btn" type="submit" ${bot.running?'disabled':''}>Lưu Telegram</button>
  <button class="small-btn" type="button" onclick="testConnection('telegram')">✓ Kiểm tra token</button>
  <button class="small-btn" type="button" onclick="controlTelegram('start')" ${bot.running?'disabled':''}>▶ Bật Bot</button>
- <button class="small-btn" type="button" onclick="controlTelegram('stop')" ${bot.running?'':'disabled'}>■ Tắt Bot</button></div>
+ <button class="small-btn" type="button" onclick="controlTelegram('stop')" ${bot.running?'':'disabled'}>■ Tắt Bot</button>
+ <button class="small-btn" type="button" onclick="removeIntegrationSecret('telegram')" ${cfg.telegram_token_configured&&!bot.running?'':'disabled'}>Xóa token đã lưu</button></div>
  </form>
  <div class="note" style="margin-top:12px">${bot.running?'🟢 Telegram Bot đang chạy':'⚪ Telegram Bot chưa chạy'} • ${h(bot.message||'')}.
  Bot nhận ảnh và bản nháp theo chức năng hiện có, không tự đăng sản phẩm lên sàn.</div>
@@ -273,6 +275,14 @@ async function saveTelegramSettings(event){
  telegram_autostart:e.get('telegram_autostart')==='on'};
  try{const r=await api('settings/telegram',payload);toast(r.message||'Đã lưu Telegram');await refresh()}
  catch(err){toast(err.message,true)}
+}
+async function removeIntegrationSecret(provider){
+ const label=provider==='openai'?'OpenAI API key':'Telegram Bot Token';
+ if(!confirm('Xóa '+label+' khỏi kho mật khẩu Windows?'))return;
+ try{const route=provider==='openai'?'openai/remove-key':'telegram/remove-token';
+ const r=await api('settings/'+route,{confirm:true});
+ toast(r.message||'Đã xóa khóa đã lưu');await refresh();}
+ catch(e){toast('Không xóa được '+label+': '+e.message,true)}
 }
 async function testConnection(target){
  try{toast('Đang kiểm tra kết nối '+target+'...');const r=await api('settings/'+target+'/test',{check:true});
