@@ -239,6 +239,14 @@ def retry(db_path,mission_id):
         if not cur.rowcount:raise ValueError("Chỉ được thử lại nhiệm vụ CEO đang bị chặn")
         c.execute("DELETE FROM ceo_delegations WHERE mission_id=?",(mission_id,))
         c.execute("DELETE FROM ceo_reports WHERE mission_id=?",(mission_id,))
+        # A failed generation can retain drafts. Retrying must never expose an
+        # unapproved prior Veo prompt or obsolete SEO/price result as current.
+        c.execute("""UPDATE commerce_outputs SET seo_title='',seo_description='',
+                 retail_price='',script_40s='',veo_prompts='',status='pending',
+                 updated_at=? WHERE mission_id=?""",(now(),mission_id))
+        c.execute("""UPDATE video_production SET research='',script='',
+                 compliance='',storyboard='',status='research_pending',
+                 updated_at=? WHERE mission_id=?""",(now(),mission_id))
     # Keep discussion history for audit; new attempt is separated by this marker.
     agent_forum.record(db_path,mission_id,"system","ceo","retry",
                        "Đã thử lại nhiệm vụ. Lịch sử trao đổi trước đó được giữ nguyên.")
