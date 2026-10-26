@@ -124,15 +124,16 @@ def get_account(account_id: str) -> dict:
     return record
 
 
-def resolve_proxy(record: dict) -> dict | None:
+def resolve_proxy(record: dict, env_overrides: dict | None = None) -> dict | None:
     cfg = record.get('proxy')
     if not cfg:
         return None
     proxy = {'server': cfg['server']}
     prefix = cfg.get('env_prefix')
     if prefix:
-        user = os.environ.get(f'{prefix}_USERNAME')
-        password = os.environ.get(f'{prefix}_PASSWORD')
+        env = os.environ if env_overrides is None else {**os.environ, **env_overrides}
+        user = env.get(f'{prefix}_USERNAME')
+        password = env.get(f'{prefix}_PASSWORD')
         if bool(user) != bool(password):
             raise ValueError(f'Cần cả {prefix}_USERNAME và {prefix}_PASSWORD trong biến môi trường')
         if user:
@@ -141,7 +142,7 @@ def resolve_proxy(record: dict) -> dict | None:
 
 
 @contextmanager
-def account_context(playwright, account_id: str):
+def account_context(playwright, account_id: str, proxy_env: dict | None = None):
     """One profile = one browser process. Profile contents never copied/exported."""
     account = get_account(account_id)
     folder = PROFILES / account_id
@@ -163,7 +164,7 @@ def account_context(playwright, account_id: str):
         }
         if account['browser'] == 'chrome':
             kwargs['channel'] = 'chrome'
-        proxy = resolve_proxy(account)
+        proxy = resolve_proxy(account, proxy_env)
         if proxy:
             kwargs['proxy'] = proxy
         context = playwright.chromium.launch_persistent_context(**kwargs)
@@ -254,7 +255,7 @@ def scan_local_html(html_path: str | Path, account_id: str, mode: str) -> Path:
     return dest
 
 
-def check_account_once(account_id: str) -> dict:
+def check_account_once(account_id: str, proxy_env: dict | None = None) -> dict:
     """User-requested, visible browser read-only session check for a closed profile."""
     from playwright.sync_api import sync_playwright
     from session_monitor import inspect_and_save, write_status, read_status
@@ -268,7 +269,7 @@ def check_account_once(account_id: str) -> dict:
     write_status(folder, 'checking', 0, 'Đang mở trình duyệt để kiểm tra phiên đăng nhập...')
     try:
         with sync_playwright() as playwright:
-            with account_context(playwright, account_id) as context:
+            with account_context(playwright, account_id, proxy_env=proxy_env) as context:
                 page = context.pages[0] if context.pages else context.new_page()
                 page.goto(account['start_url'], wait_until='domcontentloaded', timeout=30000)
                 page.wait_for_timeout(2500)
