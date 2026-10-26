@@ -1,40 +1,59 @@
-# Kiểm tra phiên đăng nhập Shopee/TikTok Shop (không dùng API)
+# Xác minh trạng thái đăng nhập Shopee / TikTok Shop bằng trình duyệt
 
-## Cách dùng
+**Không dùng API sàn. Không dùng số cookie để kết luận đã đăng nhập.**
 
-1. Trong **Gian hàng & Chrome Profile**, bấm **Mở Chrome** ở tài khoản muốn sử dụng.
-2. Đăng nhập thủ công, nhập OTP/xác minh trên trang chính thức (không nhập vào TEA AI).
-3. Giữ cửa sổ Chrome được phần mềm mở. Công cụ đọc trạng thái trang Seller Center và đếm các cookie áp dụng cho tên miền đó mỗi khoảng 5 giây.
-4. Quay lại Mars Studio → **Gian hàng & Profile**: xem cột **Đăng nhập**, gồm trạng thái và thời điểm kiểm tra.
-5. Bấm **Kiểm tra đăng nhập** nếu cần làm mới. Nếu profile đang mở, trình theo dõi hiện tại sẽ cập nhật. Nếu profile đã đóng, hệ thống sẽ mở Chrome một lần để đọc trạng thái rồi đóng.
+## Vì sao cookie không đáng tin?
 
-## Trạng thái
+Cookie có thể tồn tại dù phiên đã hết hạn, bị thu hồi hoặc đang cần OTP/CAPTCHA.
+Tương tự, chỉ thấy URL `/portal/` không chứng minh có quyền sử dụng Seller Center.
+Phần mềm phải xác minh bằng **trang quản trị vừa được tải lại** và các nhóm menu nội bộ đang hiển thị.
 
-- **Đang đăng nhập:** tìm thấy cookie *và* dấu hiệu giao diện Seller Center đã đăng nhập (ví dụ đường dẫn `/portal/` của Shopee). Đây là kết quả tại **thời điểm kiểm tra**, không bảo đảm phiên sẽ luôn còn hiệu lực.
-- **Đã đăng xuất:** đang thấy giao diện nhập mật khẩu/trang đăng nhập.
-- **Chưa xác định:** có cookie nhưng trang chưa cung cấp bằng chứng đăng nhập, không có cookie, hoặc không ở trang Seller Center.
-- **Đang kiểm tra:** đã yêu cầu kiểm tra nhưng chưa có kết quả.
-- **Lỗi kiểm tra:** lỗi browser, mạng hoặc proxy, không đồng nghĩa đã logout.
+## Cách sử dụng
 
-> **Cookie còn tồn tại không đồng nghĩa vẫn đăng nhập.** Cookie có thể hết hạn, bị sàn thu hồi hoặc cần OTP lại. Quy tắc nhận biết DOM có thể cần điều chỉnh theo giao diện Seller Center thực tế.
+1. Vào **Gian hàng & Profile → Mở Chrome** trên đúng tài khoản.
+2. Đăng nhập thủ công trên Shopee Seller Center hoặc TikTok Shop Seller Center.
+3. Sau khi vào trang quản trị thật, phần mềm nhận diện các mục như **Sản phẩm** và **Đơn hàng** trên thanh menu; lúc này nó chỉ biết một trang riêng tư tiềm năng, **chưa vội xác nhận đăng nhập**.
+4. Trình theo dõi mở một tab Chrome riêng trong cùng profile và tải lại trang quản trị để xác minh. Tab bạn đang làm việc không bị điều hướng.
+5. Nút **Kiểm tra đăng nhập** yêu cầu xác minh lại ngay. Nếu Chrome Profile đóng, phần mềm mở lại cùng profile, tải trang quản trị bảo vệ, kiểm tra rồi đóng.
+6. Khi Chrome do phần mềm quản lý đang mở, hệ thống định kỳ kiểm tra lại khoảng **60 giây/lần**; kết quả `Đã xác minh đăng nhập` chỉ có hiệu lực **5 phút** và kèm thời điểm kiểm tra.
+
+## Các trạng thái
+
+| Trạng thái | Điều kiện |
+|---|---|
+| Đã xác minh đăng nhập | Sau lần tải trang mới, ở đúng tên miền Seller Center, có ít nhất 2 nhóm menu quản trị riêng tư |
+| Đã đăng xuất | Chuyển đến trang đăng nhập hoặc hiển thị form mật khẩu |
+| Cần xác minh | Trình duyệt hiển thị OTP, CAPTCHA hay trang challenge |
+| Chưa xác định | Không đọc được đủ tín hiệu, chỉ có URL/cookie hoặc kết quả cũ quá 5 phút |
+| Lỗi kiểm tra | Mạng, proxy hoặc trang không tải được |
+| Đang kiểm tra | Chưa có kết quả xác minh mới |
+
+### Giới hạn độ chính xác
+
+Không có cách nào bảo đảm phiên vẫn hợp lệ **mãi về sau**. Mỗi lần xác minh chỉ chứng minh rằng trình duyệt **vừa tải được** giao diện quản trị tại thời điểm đó.
+Ứng dụng có thể dùng SPA/SSR và thay đổi DOM; nếu menu không có trong các phần tử `nav`, `aside` hoặc `role=navigation/menuitem`, kết quả sẽ là **Chưa xác định** thay vì báo Online sai.
+
+Nếu Shopee/TikTok Shop đổi cách hiển thị thanh menu, phải điều chỉnh quy tắc DOM từ ảnh chụp giao diện thực tế hoặc tiếp tục yêu cầu bạn xác nhận thủ công.
+
+Không tự cố vượt CAPTCHA, OTP, khóa tài khoản hoặc điều kiện sử dụng của sàn.
 
 ## Bảo mật
 
-- Chrome Profile riêng của mỗi tài khoản đã tự quản lý và giữ cookie giữa các lần mở. Không cần và **không nên** xuất cookie đăng nhập sang JSON.
-- Chương trình chỉ đọc cookie trong bộ nhớ Playwright, **không lưu tên/giá trị cookie**, không gửi đến ChatGPT, Telegram, GitHub hoặc server từ xa.
-- Tệp `login_status.json` nằm *trong thư mục profile cục bộ* và chỉ có `status`, `cookie_count`, `checked_at`, `message`. File và toàn bộ profile không được commit lên GitHub.
-- Mỗi profile được khóa để không chạy hai cửa sổ Playwright cùng lúc. Nếu xuất hiện lỗi bị khóa, đóng các trình duyệt thuộc profile trước khi kiểm tra.
-- Nếu tài khoản yêu cầu đăng nhập lại, hãy đăng nhập thủ công. Không vượt OTP/CAPTCHA hoặc cơ chế bảo vệ.
+- Cookie tiếp tục lưu trong **Chrome Profile riêng**, không xuất ra JSON hoặc Telegram.
+- Phần xác minh **không đọc cookie nữa**. Chỉ trả về tín hiệu logic từ DOM, trạng thái và thời điểm kiểm tra.
+- Tệp `login_probe.json` chỉ chứa URL HTTPS của trang quản trị đã nhận diện **không có query/fragment**. Nếu URL chứa token hoặc query thì không được ghi nhận.
+- `login_status.json` chỉ lưu kết quả và thời gian. Cả hai đều thuộc profile local, không đẩy lên GitHub.
+- Nếu profile đang mở, không khởi chạy tiến trình thứ hai dùng cùng thư mục cookie; gửi lệnh kiểm tra cho cửa sổ hiện có.
 
-## Nếu trạng thái Chưa xác định
-
-Kiểm tra trực tiếp trong Chrome profile rằng bạn đang ở bảng điều khiển dành cho người bán, không phải trang đăng nhập hoặc trang công khai. Nếu sàn cập nhật đường dẫn hoặc layout, logic nhận diện phải được kiểm thử và điều chỉnh. **Không tự coi như đã đăng nhập chỉ vì cookie_count > 0.**
-
-## Kiểm thử
+## Cập nhật
 
 ```powershell
 cd D:\APhanMem\teabotAI
-py -3 -m unittest discover -s studio/tests -v
+git pull origin main
+cd studio
+.\start_windows.bat
 ```
 
-Bản này chưa được kiểm thử trên phiên đăng nhập Shopee/TikTok Shop thật của bạn.
+Nếu đang dùng trình duyệt cũ, đóng ứng dụng và mở lại rồi nhấn `Ctrl + Shift + R`.
+
+**Chưa được kiểm thử trực tiếp với tài khoản Shopee/TikTok Shop của bạn.**
