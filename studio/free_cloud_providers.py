@@ -32,28 +32,53 @@ GROQ_ENDPOINT="https://api.groq.com/openai/v1/chat/completions"
 
 
 def _provider_error_hint(error):
-    """Extract only documented error codes/types; never display freeform server text.
+    """Show safe structured Groq error metadata, never raw server messages or keys.
 
-    Provider error messages may contain echoed request data or credentials.
-    Those raw messages must not be shown in UI, logs or raised exceptions.
+    A provider may echo a user-supplied prompt or token in its error.message.
+    Render only strictly validated code/type tokens or fixed diagnostic phrases.
     """
+    import re
     try:
-        raw=error.read(4096)
+        raw=error.read(8192)
+    except (AttributeError,OSError):
+        return ""
+    try:
         data=json.loads(raw.decode("utf-8",errors="replace"))
         info=data.get("error",{}) if isinstance(data,dict) else {}
         if not isinstance(info,dict):
             return ""
-        code=info.get("code","")
-        kind=info.get("type","")
-    except (ValueError,AttributeError,OSError,TypeError):
-        return ""
+    except (ValueError,TypeError):
+        # A 403 HTML page typically originates from an access-control layer.
+        # Do not assume Cloudflare or blame a country without evidence.
+        return ("Phản hồi không phải JSON từ API (có thể là lớp bảo vệ mạng/IP). "
+                "Thử tắt proxy/VPN và kiểm tra bằng mạng khác." if
+                raw.lstrip()[:15].lower().startswith((b"<!doctype html",b"<html")) else "")
+    code=info.get("code","")
+    kind=info.get("type","")
+    message=info.get("message","")
     if code=="model_permission_blocked_org":
         return "Model bị chặn ở cấp tổ chức. Vào console.groq.com/settings/limits để cấp quyền."
     if code=="model_permission_blocked_project":
         return "Model bị chặn ở cấp dự án. Vào console.groq.com/settings/project/limits để cấp quyền."
+    if isinstance(message,str) and any(v in message.lower() for v in
+        ("region is not supported","country is not supported","geographical restriction",
+         "not available in your region","not available in your country")):
+        return "Groq báo hạn chế vùng truy cập. Kiểm tra vị trí mạng/IP và chính sách truy cập của Groq."
+    parts=[]
     if kind=="permissions_error":
-        return "Groq trả về permissions_error: kiểm tra quyền tổ chức, dự án và model."
+        parts.append("Groq báo lỗi loại permissions_error.")
+    def safe_token(value):
+        return value if isinstance(value,str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}",value) else ""
+    clean_code=safe_token(code)
+    clean_kind=safe_token(kind)
+    if clean_code:
+        parts.append("Mã lỗi Groq: "+clean_code+".")
+    if clean_kind and clean_kind!="permissions_error":
+        parts.append("Loại lỗi: "+clean_kind+".")
+    if parts:
+        return " ".join(parts)
     return ""
+
 
 def _request_json(request, transport=None, timeout=60):
     try:
@@ -79,6 +104,9 @@ def _request_json(request, transport=None, timeout=60):
             provider_hint=_provider_error_hint(ex)
             if provider_hint:
                 detail=provider_hint
+            if request.full_url.endswith("/models"):
+                detail+=" Đây là lỗi tại bước đọc danh sách model, chưa phải lỗi sử dụng GPT-OSS. "
+                detail+="Thử một câu ở console.groq.com/playground để phân biệt lỗi API và lỗi phần mềm."
         if code in (429,498) or 500<=code<=599:
             raise TemporaryProviderError("HTTP "+str(code)+": "+detail) from None
         raise RuntimeError("HTTP "+str(code)+": "+detail) from None
