@@ -344,9 +344,16 @@ def test_gemini(http=None):
     from free_cloud_providers import test_gemini as call_test
     return call_test(_get(GEMINI_SECRET),transport=http)
 
-def test_groq(http=None):
+def test_groq(http=None, key_override=None):
+    """Test a pasted key without saving it; otherwise use the Windows vault."""
     from free_cloud_providers import test_groq as call_test
-    return call_test(_get(GROQ_SECRET),transport=http)
+    if key_override is not None:
+        if not isinstance(key_override,str) or len(key_override)>4096:
+            raise ValueError("Định dạng Groq API key không hợp lệ")
+        key=key_override.strip() or _get(GROQ_SECRET)
+    else:
+        key=_get(GROQ_SECRET)
+    return call_test(key,transport=http)
 
 def test_claude(http=None):
     """Anthropic models.list is a read-only authentication and availability test."""
