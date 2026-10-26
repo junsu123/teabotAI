@@ -152,6 +152,16 @@ class FreeFirstTests(unittest.TestCase):
                 self.db,env=settings.openai_env({}),transport=respond)
         self.assertEqual(len(seen),1)
 
+    def test_unsaved_gemini_key_can_be_checked_before_save(self):
+        def read_models(req):
+            self.assertEqual(req.get_header("X-goog-api-key"),"gemini-unsaved-temporary")
+            return {"models":[{"name":"models/gemini-3.8-flash"}]}
+        checked=settings.test_gemini(http=read_models,
+                                     key_override="gemini-unsaved-temporary")
+        self.assertTrue(checked["ok"])
+        self.assertIn("gemini-3.8-flash",checked["supported_models"])
+        self.assertFalse(settings.status()["gemini_key_configured"])
+
     def test_unsaved_groq_key_and_permissions(self):
         # The test button must work before the Save button.
         def read_models(request):
