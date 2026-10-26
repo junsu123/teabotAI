@@ -101,8 +101,8 @@ function missionsView(){const ms=data.missions;return `${pageHead('👑 CEO COMM
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0">
 ${['ceo','strategy','compliance','research','creative','analyst'].map(agent=>{const config=(data.model_routing?.routes||{})[agent]||{provider:'ollama'};
 return `<div style="border:1px solid #315062;border-radius:10px;padding:12px">
-<strong>${h(actorName(agent))}</strong><div class="tagline">${config.provider==='openai'?'OpenAI – '+h(config.model):'Ollama – Máy cá nhân'}</div></div>`}).join('')}
-</div><div class="note">OpenAI API: ${data.model_routing?.openai_agents?.length?(data.model_routing?.openai_key_configured?'Đã lưu API key trong hệ thống':'⚠️ Chưa lưu OpenAI API key'):'Chưa bật (không phát sinh phí API)'}.
+<strong>${h(actorName(agent))}</strong><div class="tagline">${config.provider==='openai'?'OpenAI – '+h(config.model):config.provider==='claude'?'Claude – '+h(config.model):'Ollama – Máy cá nhân'}</div></div>`}).join('')}
+</div><div class="note">API AI: ${(data.model_routing?.claude_agents?.length||data.model_routing?.openai_agents?.length)?((data.model_routing?.claude_key_configured||data.model_routing?.openai_key_configured)?'Đã lưu ít nhất một API key':'⚠️ Chưa lưu API key'):'Chưa bật (không phát sinh phí API)'}.
 Chi phí API tháng này (ước tính): ${Number(data.openai_usage?.estimated_usd||0).toFixed(3)} USD; giới hạn cục bộ ${data.model_routing?.monthly_limit_usd??12} USD/tháng.
 <br>Ollama: ${data.ollama?.running?(data.ollama.model_ready?'Đã kết nối – '+h(data.ollama.model):'Đang chạy, chưa tải model '+h(data.ollama.model)):'Chưa kết nối'}.
 <br>Thông tin này là trạng thái cấu hình, không phải bảo đảm dịch vụ OpenAI đang sẵn sàng. Nhiệm vụ được xử lý theo thứ tự.</div></div>`}
@@ -194,32 +194,68 @@ function jobsView(){const rows=data.jobs;return `${pageHead('▤ PRODUCT LISTING
 function memoryView(){const ls=data.learnings;return `${pageHead('✧ LONG TERM MEMORY','Bộ nhớ <span class="gradient-text">AI tự học</span>','Lưu kinh nghiệm có nguồn và trạng thái kiểm chứng để các agent có thể sử dụng.',eButton('+ Thêm bài học','onclick="showLearningForm()"'))}<div class="two-cols"><section class="panel"><div class="panel-head"><h3>Thẻ kiến thức được lưu</h3><small>${ls.length} bài học</small></div>${ls.length?ls.map(l=>`<div style="padding:17px;border-bottom:1px solid #244253"><div>${tag(l.validation)} ${tag(l.category)}</div><h3 style="font-size:14px;margin:9px 0 4px">${h(l.title)}</h3><p class="tagline" style="margin:0">${h(l.description)}</p><small style="color:#658fa8">${h(l.source)||'Chưa đính kèm nguồn'} • ${fmtDate(l.created_at)}</small></div>`).join(''):empty('🧠','Bộ nhớ còn trống','Tạo bài học đầu tiên từ thực chiến hoặc tài liệu đã xác minh.')}</section><section class="panel padded"><h3>Vòng lặp học hỏi</h3>${[['1','Đọc nguồn đã cho phép'],['2','Đưa ra giả thuyết'],['3','Thử nghiệm thực tế'],['4','Đánh giá kết quả'],['5','Lưu bài học đã kiểm chứng']].map(([n,t])=>`<div class="info-row"><span class="number-dot">${n}</span><strong>${t}</strong></div>`).join('')}<div class="note warning" style="margin-top:15px">Bản GUI hiện lưu kiến thức thủ công; chưa có dịch vụ nghiên cứu tự động chạy nền. Mở rộng này cần kết nối workflow AI.</div></section></div>`}
 const agentName={ceo:'AI CEO',strategy:'AI Strategy',compliance:'AI Compliance',
  research:'AI Research',creative:'AI Creative',analyst:'AI Analyst'};
-function openaiSettingsSection(){
- const cfg=data.connection_settings||{},router=data.model_routing||{},enabled=new Set(cfg.openai_agents||[]);
- const models=cfg.openai_models||{};
- return `<section class="panel padded"><h3>✦ Cài đặt ChatGPT / OpenAI API</h3>
- <p class="tagline">Nhập API key ngay tại đây. Phần mềm lưu trong kho mật khẩu Windows. Chỉ các agent bạn chọn mới sử dụng OpenAI trả phí.</p>
- <form id="openaiSettingsForm" onsubmit="saveOpenaiSettings(event)">
- <div class="field"><label>OpenAI API Key</label>
- <input type="password" name="api_key" autocomplete="new-password" placeholder="${cfg.openai_key_configured?'Đã lưu khóa – để trống nếu không đổi':'Nhập API key tại đây (không đưa vào GitHub)'}">
- <small>${cfg.openai_key_configured?'✓ Có API key đã lưu':'Chưa lưu API key'}</small></div>
- <div class="field"><label>Giới hạn chi phí ước tính mỗi tháng (USD)</label>
- <input type="number" name="monthly_limit_usd" min="1" max="1000" step="0.5" required value="${Number(cfg.monthly_limit_usd||12)}"></div>
- <div class="table-wrap"><table class="data-table"><thead><tr><th>Vị trí</th><th>Nhà cung cấp</th><th>Model OpenAI</th></tr></thead>
- <tbody>${['ceo','strategy','compliance','research','creative','analyst'].map(a=>`
- <tr><td><strong>${agentName[a]}</strong></td>
- <td><select name="provider_${a}"><option value="ollama" ${!enabled.has(a)?'selected':''}>Ollama (miễn phí cục bộ)</option>
- <option value="openai" ${enabled.has(a)?'selected':''}>OpenAI API (trả phí)</option></select></td>
- <td><select name="model_${a}">
- ${['gpt-6.1-sol','gpt-6-luna'].map(x=>`<option value="${x}" ${models[a]===x?'selected':''}>${x}</option>`).join('')}
- </select></td></tr>`).join('')}</tbody></table></div>
- <div class="note">Khuyên dùng: bật OpenAI cho CEO trước. API ChatGPT được tính phí riêng với gói ChatGPT Plus. Thay đổi có hiệu lực ở nhiệm vụ tiếp theo.</div>
- <div class="form-bottom" style="display:flex;gap:10px;flex-wrap:wrap">
- <button class="primary-btn" type="submit">Lưu cấu hình ChatGPT</button>
- <button class="small-btn" type="button" onclick="testConnection('openai')">✓ Kiểm tra API key</button>
- <button class="small-btn" type="button" onclick="removeIntegrationSecret('openai')" ${cfg.openai_key_configured?'':'disabled'}>Xóa API key đã lưu</button></div></form>
- <div class="tagline" style="margin-top:12px">Chi phí OpenAI ước tính trong tháng: ${Number(data.openai_usage?.estimated_usd||0).toFixed(4)} USD • ${Number(data.openai_usage?.calls||0)} lượt gọi.</div>
+function aiSettingsSection(){
+ const cfg=data.connection_settings||{}, providers=cfg.agent_providers||{},
+      claudeModels=cfg.claude_models||{},openaiModels=cfg.openai_models||{};
+ const roles=['ceo','strategy','compliance','research','creative','analyst'];
+ return `<section class="panel padded" style="min-width:0">
+ <h3>✦ Ưu tiên Claude API – Bộ não công ty AI</h3>
+ <p class="tagline">Thiết lập trực tiếp bằng chuột. AI CEO là đầu mối duy nhất; chỉ CEO chốt phương án. Không tự phát sinh phí nếu bạn chưa lưu khóa và chọn Claude.</p>
+ <form id="aiSettingsForm" onsubmit="saveAISettings(event)">
+ <div class="field"><label>Claude API Key (Anthropic)</label>
+ <input type="password" name="claude_api_key" autocomplete="new-password" placeholder="${cfg.claude_key_configured?'Đã lưu khóa Claude – để trống nếu không thay đổi':'Nhập Claude API key tại đây'}">
+ <small>${cfg.claude_key_configured?'✓ Đã lưu Claude API key trong Windows':'Chưa cấu hình Claude API key'}</small></div>
+ <div class="field"><label>Ngân sách Claude tháng (USD, chỉ là giới hạn ước tính cục bộ)</label>
+ <input name="claude_monthly_limit_usd" type="number" min="0.5" max="1000" step="0.5" value="${Number(cfg.claude_monthly_limit_usd||12)}"></div>
+ <div class="field"><label>OpenAI API key – chỉ dùng khi bạn chọn OpenAI</label>
+ <input type="password" name="openai_api_key" autocomplete="new-password" placeholder="${cfg.openai_key_configured?'Đã lưu khóa OpenAI – để trống nếu không đổi':'Không bắt buộc khi chỉ dùng Claude'}">
+ <small>${cfg.openai_key_configured?'✓ Đã lưu OpenAI key':'Chưa lưu OpenAI key'}</small></div>
+ <div class="field"><label>Ngân sách OpenAI tháng (USD)</label>
+ <input name="monthly_limit_usd" type="number" min="0.5" max="1000" step="0.5" value="${Number(cfg.monthly_limit_usd||12)}"></div>
+ <div class="note">Gợi ý: ưu tiên Claude Sonnet 4.6 cho CEO, Strategy, Compliance và Research; Claude Haiku 4.5 cho Creative, Analyst. Opus 4.6 dành cho nhiệm vụ khó với chi phí cao hơn.</div>
+ <div class="form-bottom" style="margin:10px 0"><button type="button" class="small-btn" onclick="preferClaudePreset()">✦ Ưu tiên Claude cho tất cả agent</button>
+ <button type="button" class="small-btn" onclick="preferBalancedPreset()">◉ Claude CEO & chiến lược, Ollama việc nhẹ</button></div>
+ <div class="table-wrap"><table class="data-table"><thead><tr><th>Vị trí</th><th>Nhà cung cấp</th><th>Model Claude</th><th>Model OpenAI</th></tr></thead>
+ <tbody>${roles.map(a=>{
+ const provider=providers[a]||'ollama';
+ return `<tr><td><strong>${agentName[a]}</strong></td>
+ <td><select name="provider_${a}">
+ ${[['claude','Claude API (ưu tiên)'],['openai','OpenAI API'],['ollama','Ollama cục bộ']].map(p=>`<option value="${p[0]}" ${p[0]===provider?'selected':''}>${p[1]}</option>`).join('')}
+ </select></td>
+ <td><select name="claude_model_${a}">
+ ${['claude-sonnet-4-6','claude-opus-4-6','claude-haiku-4-5'].map(m=>`<option value="${m}" ${m===(claudeModels[a]||'claude-sonnet-4-6')?'selected':''}>${m}</option>`).join('')}
+ </select></td>
+ <td><select name="openai_model_${a}">
+ ${['gpt-6.1-sol','gpt-6-luna'].map(m=>`<option value="${m}" ${m===(openaiModels[a]||'gpt-6-luna')?'selected':''}>${m}</option>`).join('')}
+ </select></td></tr>`}).join('')}</tbody></table></div>
+ <div class="form-bottom" style="display:flex;gap:8px;flex-wrap:wrap">
+ <button type="submit" class="primary-btn">💾 Lưu cấu hình AI</button>
+ <button type="button" class="small-btn" onclick="testConnection('claude')">✓ Kiểm tra Claude API</button>
+ <button type="button" class="small-btn" onclick="testConnection('openai')">✓ Kiểm tra OpenAI API</button>
+ <button type="button" class="small-btn" onclick="removeIntegrationSecret('claude')" ${cfg.claude_key_configured?'':'disabled'}>Xóa Claude key</button>
+ <button type="button" class="small-btn" onclick="removeIntegrationSecret('openai')" ${cfg.openai_key_configured?'':'disabled'}>Xóa OpenAI key</button>
+ </div>
+ </form>
+ <div class="note">Chi phí ước tính tháng này — Claude: ${Number(data.claude_usage?.estimated_usd||0).toFixed(4)} USD (${Number(data.claude_usage?.calls||0)} lượt); OpenAI: ${Number(data.openai_usage?.estimated_usd||0).toFixed(4)} USD (${Number(data.openai_usage?.calls||0)} lượt).
+ Chỉ thay đổi lựa chọn mô hình cho lượt gọi AI tiếp theo, không ảnh hưởng phiên đang xử lý.</div>
  </section>`;
+}
+function preferClaudePreset(){
+ const form=$('#aiSettingsForm');if(!form)return;
+ for(const a of ['ceo','strategy','compliance','research','creative','analyst']){
+   form.elements['provider_'+a].value='claude';
+   form.elements['claude_model_'+a].value=['creative','analyst'].includes(a)?'claude-haiku-4-5':'claude-sonnet-4-6';
+ }
+ toast('Đã chọn Claude cho các agent. Bấm Lưu cấu hình AI để áp dụng.');
+}
+function preferBalancedPreset(){
+ const form=$('#aiSettingsForm');if(!form)return;
+ for(const a of ['ceo','strategy','compliance','research','creative','analyst']){
+   const use=['ceo','strategy','compliance'].includes(a);
+   form.elements['provider_'+a].value=use?'claude':'ollama';
+   form.elements['claude_model_'+a].value='claude-sonnet-4-6';
+ }
+ toast('Đã chọn Claude cho CEO/Strategy/Compliance. Bấm Lưu để áp dụng.');
 }
 function telegramSettingsSection(){
  const cfg=data.connection_settings||{},bot=data.telegram_process||{};
@@ -247,9 +283,9 @@ function telegramSettingsSection(){
  <div class="tagline">Để tạo Bot: vào Telegram → tìm <strong>@BotFather</strong> → gửi /newbot. Bạn cần biết User ID dạng số của tài khoản được phép sử dụng.</div>
  </section>`;
 }
-function settingsView(){return `${pageHead('⚙ LOCAL INTEGRATIONS','Cài đặt <span class="gradient-text">ChatGPT & Telegram</span>',
+function settingsView(){return `${pageHead('⚙ LOCAL INTEGRATIONS','Cài đặt <span class="gradient-text">Claude / ChatGPT & Telegram</span>',
  'Cấu hình trực tiếp tại đây – không sửa file .env và không chạy lệnh cấu hình.', '')}
- <div class="two-cols">${openaiSettingsSection()}${telegramSettingsSection()}</div>`;}
+ <div class="two-cols">${aiSettingsSection()}${telegramSettingsSection()}</div>`;}
 function telegramView(){return `${pageHead('➤ TELEGRAM CONNECTOR','Telegram <span class="gradient-text">Bot</span>',
  'Thiết lập và vận hành bot nhận ảnh ngay trong phần mềm.',eButton('⚙ Cài đặt cả ChatGPT','onclick="navigate(\'settings\')"'))}
  <div class="two-cols">${telegramSettingsSection()}
@@ -259,14 +295,19 @@ MODE=new
 ACCOUNTS=shopee_01,tiktok_01</div>
  <button class="small-btn" style="margin-top:15px" onclick="copyText('SKU=TRA-001\\nMODE=new\\nACCOUNTS=shopee_01,tiktok_01')">Sao chép mẫu</button>
  <div class="note warning" style="margin-top:18px">Không gửi mật khẩu, OTP, cookie Shopee hoặc OpenAI API key qua Telegram. Cần được cấp quyền Bot trước khi dùng.</div></section></div>`;}
-async function saveOpenaiSettings(event){
+async function saveAISettings(event){
  event.preventDefault();
- const form=event.target,entries=new FormData(form),agents=['ceo','strategy','compliance','research','creative','analyst'];
- const payload={api_key:entries.get('api_key')||'',monthly_limit_usd:Number(entries.get('monthly_limit_usd')),
-  openai_agents:agents.filter(a=>entries.get('provider_'+a)==='openai'),
-  openai_models:Object.fromEntries(agents.map(a=>[a,entries.get('model_'+a)]))};
- try{const r=await api('settings/openai',payload);toast(r.message||'Đã lưu OpenAI');await refresh()}
- catch(e){toast(e.message,true)}
+ const e=new FormData(event.target),roles=['ceo','strategy','compliance','research','creative','analyst'];
+ const payload={
+  claude_api_key:e.get('claude_api_key')||'',openai_api_key:e.get('openai_api_key')||'',
+  claude_monthly_limit_usd:Number(e.get('claude_monthly_limit_usd')),
+  monthly_limit_usd:Number(e.get('monthly_limit_usd')),
+  agent_providers:Object.fromEntries(roles.map(a=>[a,e.get('provider_'+a)])),
+  claude_models:Object.fromEntries(roles.map(a=>[a,e.get('claude_model_'+a)])),
+  openai_models:Object.fromEntries(roles.map(a=>[a,e.get('openai_model_'+a)]))
+ };
+ try{const r=await api('settings/ai',payload);toast(r.message||'Đã lưu cấu hình AI');await refresh()}
+ catch(err){toast('Lưu cấu hình AI: '+err.message,true)}
 }
 async function saveTelegramSettings(event){
  event.preventDefault();
@@ -277,9 +318,9 @@ async function saveTelegramSettings(event){
  catch(err){toast(err.message,true)}
 }
 async function removeIntegrationSecret(provider){
- const label=provider==='openai'?'OpenAI API key':'Telegram Bot Token';
+ const label=provider==='claude'?'Claude API key':provider==='openai'?'OpenAI API key':'Telegram Bot Token';
  if(!confirm('Xóa '+label+' khỏi kho mật khẩu Windows?'))return;
- try{const route=provider==='openai'?'openai/remove-key':'telegram/remove-token';
+ try{const route=provider==='claude'?'claude/remove-key':provider==='openai'?'openai/remove-key':'telegram/remove-token';
  const r=await api('settings/'+route,{confirm:true});
  toast(r.message||'Đã xóa khóa đã lưu');await refresh();}
  catch(e){toast('Không xóa được '+label+': '+e.message,true)}
