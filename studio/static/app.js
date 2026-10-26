@@ -207,10 +207,6 @@ function aiSettingsSection(){
  <div class="integration-route"><span>01 <b>Gemini</b></span><span aria-hidden="true">→</span><span>02 <b>Groq</b></span><span aria-hidden="true">→</span><span>03 <b>Ollama</b></span></div>
  </div>
  <form id="aiSettingsForm" class="integration-form" onsubmit="saveAISettings(event)" oninput="markIntegrationDirty()" onchange="markIntegrationDirty()">
- <label class="checkbox-line" style="margin:14px 0;padding:12px;border:1px solid #315062;border-radius:10px">
- <input type="checkbox" name="free_only" onchange="updateFreeOnlyControls()" ${cfg.free_only!==false?'checked':''}>
- <strong>Chỉ sử dụng model có gói API miễn phí (khuyên dùng)</strong></label>
- <div class="note">Gemini Free Tier và Groq Free Plan tùy tài khoản, hạn mức và trạng thái thanh toán. Tùy chọn này chặn Claude/OpenAI, nhưng không bảo đảm tài khoản Gemini/Groq đã bật billing sẽ không phát sinh phí.</div>
  <div class="integration-section-title"><span>BƯỚC 1</span><div><h3>Kết nối hai dịch vụ AI</h3><p>Nhập API key của bạn, bấm kiểm tra, sau đó lưu ở cuối trang.</p></div></div>
  <div class="integration-key-layout">
  <article class="integration-key-card">
@@ -238,11 +234,41 @@ function aiSettingsSection(){
  <div class="integration-key-actions"><button type="button" class="small-btn" onclick="testConnection('groq')">✓ Kiểm tra Groq</button>
  ${cfg.groq_key_configured?'<button type="button" class="integration-danger" onclick="removeIntegrationSecret(\'groq\')">Xóa khóa</button>':''}</div>
  <div id="groqConnectionResult" class="integration-feedback" role="status" aria-live="polite" hidden></div>
- </article></div> <div class="note">Thứ tự ưu tiên: <strong>Gemini → Groq → Claude → OpenAI → Ollama</strong>.
- Trong chế độ TỰ ĐỘNG, Claude và OpenAI chỉ được thử nếu bạn cho phép API trả phí. Không có giới hạn đảm bảo miễn phí: quota tùy tài khoản Google/Groq.</div>
- <label class="checkbox-line"><input type="checkbox" name="allow_paid_fallback" ${cfg.allow_paid_fallback?'checked':''} ${cfg.free_only!==false?'disabled':''}>
- Cho phép tự chuyển sang Claude/OpenAI trả phí khi Gemini/Groq tạm gián đoạn</label>
- <div class="field"><label>Claude API Key (Anthropic)</label>
+ </article></div> <div class="integration-section-title"><span>BƯỚC 2</span><div><h3>Chọn chế độ vận hành</h3><p>Ưu tiên miễn phí, không tự gọi Claude/OpenAI tính phí.</p></div></div>
+ <section class="integration-settings-area">
+ <label class="checkbox-line">
+ <input type="checkbox" name="free_only" onchange="updateFreeOnlyControls()" ${cfg.free_only!==false?'checked':''}>
+ <span><strong>Chỉ dùng model có gói API miễn phí</strong><small style="display:block;color:#9ebccc;margin-top:4px">Khóa API Claude/OpenAI trả phí, kể cả dự phòng.</small></span></label>
+ <p class="tagline">Free Tier phụ thuộc hạn mức và gói billing thực tế của Google/Groq. Model có gói miễn phí vẫn có thể bị tính tiền nếu tài khoản đã bật thanh toán.</p>
+ <div class="integration-key-actions">
+ <button type="button" class="primary-btn" onclick="preferFreePreset()">✦ Áp dụng cấu hình đề xuất cho 6 agent</button></div>
+ </section>
+ <div class="integration-section-title"><span>BƯỚC 3</span><div><h3>Tùy chỉnh từng AI Agent</h3><p>Mặc định đã được lựa chọn. Chỉ cần mở phần này khi muốn chỉnh model.</p></div></div>
+  <details class="integration-expander" id="agentModelSettings">
+ <summary>Điều chỉnh model cho 6 agent <small>Mở rộng khi cần</small></summary>
+ <p class="tagline">Chỉ AI CEO chốt phương án. Gemini và Groq là các model miễn phí theo hạn mức của nhà cung cấp.</p>
+ <div class="integration-agent-grid">${roles.map(a=>{
+ const provider=providers[a]||'auto';
+ return `<article class="integration-agent-card">
+ <h4>${agentName[a]} <span class="integration-agent-meta">· ${a==='ceo'?'Quyết định':a==='creative'||a==='analyst'?'Tác vụ nhẹ':'Chuyên môn'}</span></h4>
+ <div class="field integration-agent-provider"><label>Nhà cung cấp</label><select name="provider_${a}">
+ ${[['auto','Tự động: Gemini → Groq → Ollama'],['gemini','Gemini (có Free Tier)'],['groq','Groq (có Free Plan)'],['claude','Claude (trả phí)'],['openai','OpenAI (trả phí)'],['ollama','Ollama cục bộ']].map(p=>`<option value="${p[0]}" ${p[0]===provider?'selected':''} ${cfg.free_only!==false&&['claude','openai'].includes(p[0])?'disabled':''}>${p[1]}</option>`).join('')}
+ </select></div>
+ <div class="integration-agent-fields">
+ <div class="field"><label>Gemini chính</label><select name="gemini_model_${a}">${['gemini-3.8-flash','gemini-3.6-flash','gemini-3.5-flash-lite','gemini-3.1-flash-lite','gemini-2.5-flash','gemini-2.5-flash-lite'].map(m=>`<option value="${m}" ${m===(cfg.gemini_models?.[a]||(a==='creative'||a==='analyst'?'gemini-3.5-flash-lite':'gemini-3.8-flash'))?'selected':''}>${m}</option>`).join('')}</select></div>
+ <div class="field"><label>Groq dự phòng</label><select name="groq_model_${a}">${['openai/gpt-oss-120b','openai/gpt-oss-20b','qwen/qwen3.8-27b'].map(m=>`<option value="${m}" ${m===(cfg.groq_models?.[a]||(a==='creative'||a==='analyst'?'openai/gpt-oss-20b':'openai/gpt-oss-120b'))?'selected':''}>${m}</option>`).join('')}</select></div></div>
+ <details class="integration-expander"><summary>Model trả phí</summary>
+ <div class="integration-agent-fields"><div class="field"><label>Claude</label><select name="claude_model_${a}">
+ ${['claude-sonnet-4-6','claude-opus-4-6','claude-haiku-4-5'].map(m=>`<option value="${m}" ${m===(claudeModels[a]||'claude-sonnet-4-6')?'selected':''}>${m}</option>`).join('')}
+ </select></div>
+ <div class="field"><label>OpenAI</label><select name="openai_model_${a}">
+ ${['gpt-6.1-sol','gpt-6-luna'].map(m=>`<option value="${m}" ${m===(openaiModels[a]||'gpt-6-luna')?'selected':''}>${m}</option>`).join('')}
+ </select></div></div></details></article>`}).join('')}</div></details>
+ <details class="integration-expander">
+ <summary>⚙ API trả phí và tùy chọn nâng cao <small>Claude · OpenAI · Ngân sách</small></summary>
+ <p class="tagline">Chỉ sử dụng khi bạn chủ động tắt chế độ miễn phí. Các khóa được lưu an toàn trên Windows.</p>
+ <label class="checkbox-line"><input type="checkbox" name="allow_paid_fallback" ${cfg.allow_paid_fallback?'checked':''} ${cfg.free_only!==false?'disabled':''}> Cho phép tự dự phòng sang Claude/OpenAI trả phí</label>
+ <div class="integration-paid-grid"><div class="field"><label>Claude API Key (Anthropic)</label>
  <input type="password" name="claude_api_key" autocomplete="new-password" placeholder="${cfg.claude_key_configured?'Đã lưu khóa Claude – để trống nếu không thay đổi':'Nhập Claude API key tại đây'}">
  <small>${cfg.claude_key_configured?'✓ Đã lưu Claude API key trong Windows':'Chưa cấu hình Claude API key'}</small></div>
  <div class="field"><label>Ngân sách Claude tháng (USD, chỉ là giới hạn ước tính cục bộ)</label>
@@ -252,35 +278,21 @@ function aiSettingsSection(){
  <small>${cfg.openai_key_configured?'✓ Đã lưu OpenAI key':'Chưa lưu OpenAI key'}</small></div>
  <div class="field"><label>Ngân sách OpenAI tháng (USD)</label>
  <input name="monthly_limit_usd" type="number" min="0.5" max="1000" step="0.5" value="${Number(cfg.monthly_limit_usd||12)}"></div>
- <div class="note">Model Free Tier mặc định: Gemini 3.8 Flash cho CEO/Strategy/Research/Compliance, Gemini 3.5 Flash-Lite cho Creative/Analyst; Groq GPT-OSS 120B và 20B. Claude/OpenAI là API trả phí, không thuộc chế độ miễn phí.</div>
- <div class="form-bottom" style="margin:10px 0"><button type="button" class="small-btn" onclick="preferFreePreset()">✦ Áp dụng Gemini → Groq cho tất cả agent</button><button type="button" class="small-btn" onclick="preferClaudePreset()">✦ Ưu tiên Claude cho tất cả agent</button>
- <button type="button" class="small-btn" onclick="preferBalancedPreset()">◉ Claude CEO & chiến lược, Ollama việc nhẹ</button></div>
- <div class="table-wrap"><table class="data-table"><thead><tr><th>Vị trí</th><th>Nhà cung cấp</th><th>Model Gemini</th><th>Model Groq</th><th>Model Claude</th><th>Model OpenAI</th></tr></thead>
- <tbody>${roles.map(a=>{
- const provider=providers[a]||'auto';
- return `<tr><td><strong>${agentName[a]}</strong></td>
- <td><select name="provider_${a}">
- ${[['auto','Tự động: Gemini → Groq → Ollama'],['gemini','Gemini (có Free Tier)'],['groq','Groq (có Free Plan)'],['claude','Claude (trả phí)'],['openai','OpenAI (trả phí)'],['ollama','Ollama cục bộ']].map(p=>`<option value="${p[0]}" ${p[0]===provider?'selected':''} ${cfg.free_only!==false&&['claude','openai'].includes(p[0])?'disabled':''}>${p[1]}</option>`).join('')}
- </select></td>
- <td><select name="gemini_model_${a}">${['gemini-3.8-flash','gemini-3.6-flash','gemini-3.5-flash-lite','gemini-3.1-flash-lite','gemini-2.5-flash','gemini-2.5-flash-lite'].map(m=>`<option value="${m}" ${m===(cfg.gemini_models?.[a]||(a==='creative'||a==='analyst'?'gemini-3.5-flash-lite':'gemini-3.8-flash'))?'selected':''}>${m}</option>`).join('')}</select></td>
- <td><select name="groq_model_${a}">${['openai/gpt-oss-120b','openai/gpt-oss-20b','qwen/qwen3.8-27b'].map(m=>`<option value="${m}" ${m===(cfg.groq_models?.[a]||(a==='creative'||a==='analyst'?'openai/gpt-oss-20b':'openai/gpt-oss-120b'))?'selected':''}>${m}</option>`).join('')}</select></td>
- <td><select name="claude_model_${a}">
- ${['claude-sonnet-4-6','claude-opus-4-6','claude-haiku-4-5'].map(m=>`<option value="${m}" ${m===(claudeModels[a]||'claude-sonnet-4-6')?'selected':''}>${m}</option>`).join('')}
- </select></td>
- <td><select name="openai_model_${a}">
- ${['gpt-6.1-sol','gpt-6-luna'].map(m=>`<option value="${m}" ${m===(openaiModels[a]||'gpt-6-luna')?'selected':''}>${m}</option>`).join('')}
- </select></td></tr>`}).join('')}</tbody></table></div>
- <div class="form-bottom" style="display:flex;gap:8px;flex-wrap:wrap">
- <button type="submit" class="primary-btn">💾 Lưu cấu hình AI</button>
- <button type="button" class="small-btn" onclick="testConnection('claude')">✓ Kiểm tra Claude API</button>
- <button type="button" class="small-btn" onclick="testConnection('openai')">✓ Kiểm tra OpenAI API</button>
- <button type="button" class="small-btn" onclick="removeIntegrationSecret('claude')" ${cfg.claude_key_configured?'':'disabled'}>Xóa Claude key</button>
- <button type="button" class="small-btn" onclick="removeIntegrationSecret('openai')" ${cfg.openai_key_configured?'':'disabled'}>Xóa OpenAI key</button>
+</div>
+ <div class="integration-key-actions">
+ <button type="button" class="small-btn" onclick="testConnection('claude')">Kiểm tra Claude</button>
+ <button type="button" class="small-btn" onclick="testConnection('openai')">Kiểm tra OpenAI</button>
+ <button type="button" class="integration-danger" onclick="removeIntegrationSecret('claude')" ${cfg.claude_key_configured?'':'disabled'}>Xóa khóa Claude</button>
+ <button type="button" class="integration-danger" onclick="removeIntegrationSecret('openai')" ${cfg.openai_key_configured?'':'disabled'}>Xóa khóa OpenAI</button></div>
+ <p class="tagline">Chi phí API ước tính tháng này: Claude ${Number(data.claude_usage?.estimated_usd||0).toFixed(4)} USD · OpenAI ${Number(data.openai_usage?.estimated_usd||0).toFixed(4)} USD.</p>
+ <div class="integration-key-actions"><button type="button" class="small-btn" onclick="preferClaudePreset()">Dùng Claude cho các agent</button>
+ <button type="button" class="small-btn" onclick="preferBalancedPreset()">Claude CEO/Strategy/Compliance</button></div>
+ </details>
+ <div class="integration-savebar">
+ <div><strong id="aiUnsavedIndicator">Cấu hình đã tải</strong><small>Thay đổi chỉ có hiệu lực sau khi lưu.</small></div>
+ <button type="submit" class="primary-btn">Lưu cấu hình AI</button>
  </div>
- </form>
- <div class="note">Chi phí ước tính tháng này — Claude: ${Number(data.claude_usage?.estimated_usd||0).toFixed(4)} USD (${Number(data.claude_usage?.calls||0)} lượt); OpenAI: ${Number(data.openai_usage?.estimated_usd||0).toFixed(4)} USD (${Number(data.openai_usage?.calls||0)} lượt).
- Chỉ thay đổi lựa chọn mô hình cho lượt gọi AI tiếp theo, không ảnh hưởng phiên đang xử lý.</div>
- </section>`;
+ </form> </section>`;
 }
 function toggleIntegrationKey(id,button){
  const input=document.getElementById(id);if(!input)return;
