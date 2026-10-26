@@ -609,7 +609,7 @@ function showMissionForm(){
  '<form id="missionForm"><input type="hidden" name="agent_id" value="ceo">'+
  '<div class="note">👑 Người tiếp nhận duy nhất: AI CEO · không tự đăng video hoặc tạo MP4 khi chưa tích hợp công cụ render.</div>'+
  '<div class="field"><label>Loại nhiệm vụ</label><select name="workflow" id="missionWorkflow" onchange="toggleMissionWorkflow()">'+
- '<option value="tiktok_video" selected>🔎 Nghiên cứu TikTok → kịch bản → Phòng Video AI</option>'+
+ '<option value="tiktok_video" selected>🎯 SEO + Giá bán lẻ + Video 40s + 5 prompt Veo 3</option>'+
  '<option value="">Nhiệm vụ CEO thông thường</option></select></div>'+
  '<div class="field"><label>Tiêu đề nhiệm vụ</label><input name="title" required minlength="3" maxlength="150" placeholder="Ví dụ: Lập 3 video bán trà thảo mộc"></div>'+
  '<div class="field"><label>Yêu cầu chi tiết</label><textarea name="detail" maxlength="2000" rows="3" placeholder="Phong cách video, khách hàng mục tiêu, thông điệp, tỷ lệ khung hình..."></textarea></div>'+
@@ -621,6 +621,7 @@ function showMissionForm(){
  '<div class="field"><label>Ảnh sản phẩm 3D (PNG/JPG/WebP, tối đa 8MB)</label><input name="image3d" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"><small>Ảnh chỉ làm tham chiếu; không được tự đổi chữ, màu, thiết kế bao bì.</small></div>'+
  '<div class="field"><label>Giấy tờ công bố sản phẩm (PDF/PNG/JPG/WebP, tối đa 12MB)</label><input name="disclosure_file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"><small>Tài liệu được lưu cục bộ. PDF có thể trích chữ nhưng cần kiểm chứng; ảnh/scan cần xem thủ công.</small></div></div>'+
  '<div class="field"><label>Link video TikTok tham khảo (mỗi dòng một link, tối đa 8)</label><textarea name="tiktok_urls" rows="3" placeholder="https://www.tiktok.com/@.../video/..."></textarea></div>'+
+ '<div class="field"><label>Giá bán lẻ đối thủ (URL + giá + ngày kiểm tra nếu có)</label><textarea name="price_evidence" maxlength="4500" rows="3" placeholder="Link đối thủ, giá được đăng và ngày kiểm tra. Để trống nếu không có nguồn."></textarea><small>Chưa có nguồn thì AI chỉ đề xuất cách khảo sát, không bịa giá.</small></div>'+
  '<div class="field"><label>Ghi chú nội dung video / transcript do bạn cung cấp</label><textarea name="research_notes" maxlength="4200" rows="3" placeholder="Ghi hook mở đầu, cách quay, lời thoại, phản ứng người xem..."></textarea><small>Phần mềm không tự tải/xem nội dung video TikTok từ URL. Link chỉ là tài liệu tham chiếu đến khi có bản ghi/transcript.</small></div></section>'+
  '<div class="form-bottom"><button class="primary-btn" id="submitMissionButton" type="submit">👑 Gửi nhiệm vụ cho CEO</button><span class="hint" id="missionUploadStatus">AI CEO sẽ nghiên cứu, viết kịch bản, kiểm duyệt rồi bàn giao storyboard (chưa render MP4).</span></div></form>');
  $('#missionForm').addEventListener('submit',submitCEOMission);
@@ -659,6 +660,7 @@ async function submitCEOMission(event){
    payload.ingredients=String(fd.get('ingredients')||'');
    payload.tiktok_urls=String(fd.get('tiktok_urls')||'');
    payload.research_notes=String(fd.get('research_notes')||'');
+   payload.price_evidence=String(fd.get('price_evidence')||'');
    const image=fd.get('image3d'),paper=fd.get('disclosure_file');
    if(image instanceof File&&image.name)
     payload.image3d=await fileAsBase64(image,8*1024*1024,'Ảnh sản phẩm');
@@ -742,7 +744,7 @@ async function approveJob(id){if(!confirm(`Duyệt nhiệm vụ #${id}? Phải c
 async function rejectJob(id){if(!confirm(`Từ chối nhiệm vụ #${id}?`))return;try{await api('jobs/reject',{id});toast('Đã từ chối');await refresh()}catch(e){toast(e.message,true)}}
 function copyText(t){if(navigator.clipboard?.writeText)navigator.clipboard.writeText(t).then(()=>toast('Đã sao chép')).catch(()=>toast('Không thể sao chép',true));else toast('Trình duyệt chưa hỗ trợ sao chép',true)}
 $('#nav').addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)navigate(b.dataset.view)});$('#refreshBtn').addEventListener('click',refresh);$('#closeModal').addEventListener('click',closeModal);$('#modalBackdrop').addEventListener('click',e=>{if(e.target.id==='modalBackdrop')closeModal()});window.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
-setInterval(()=>{if(['dom','missions','video','hq','shops'].includes(activeView)&&$('#modalBackdrop')?.hidden&&document.visibilityState==='visible')refresh()},9000);
+setInterval(()=>{if(['dom','missions','hq','shops'].includes(activeView)&&$('#modalBackdrop')?.hidden&&document.visibilityState==='visible')refresh()},9000);
 setInterval(()=>{if(activeView==='forum'&&document.visibilityState==='visible')loadForum()},6500);
 setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})},1000);
 refresh();
