@@ -63,16 +63,19 @@ def _request_json(request, transport=None, timeout=60):
         return transport(request)
     except HTTPError as ex:
         code=ex.code
+        google="googleapis.com" in request.full_url
         reasons={
             400:"Yêu cầu hoặc tham số model không hợp lệ.",
-            401:"API key không hợp lệ hoặc thuộc dịch vụ khác. Hãy tạo key tại console.groq.com/keys nếu dùng Groq.",
-            403:"API key/tài khoản không có quyền. Kiểm tra quyền và giới hạn dự án trên GroqCloud.",
+            401:("API key Gemini không hợp lệ. Hãy kiểm tra tại Google AI Studio." if google else
+                 "API key Groq không hợp lệ hoặc thuộc dịch vụ khác. Hãy dùng key từ console.groq.com/keys."),
+            403:("Google từ chối quyền truy cập Gemini API. Kiểm tra dự án, quyền API key và cài đặt Google AI Studio." if google else
+                 "API key/tài khoản Groq không có quyền. Kiểm tra quyền và giới hạn dự án trên GroqCloud."),
             404:"Đường dẫn API hoặc model không tồn tại.",
             429:"Hết lượt hoặc vượt giới hạn tốc độ API; có thể thử lại.",
             498:"Nhà cung cấp tạm hết năng lực phục vụ."
         }
         detail=reasons.get(code,"Máy chủ từ chối yêu cầu hoặc tạm gián đoạn.")
-        if code==403:
+        if code==403 and not google:
             provider_hint=_provider_error_hint(ex)
             if provider_hint:
                 detail=provider_hint
