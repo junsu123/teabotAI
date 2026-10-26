@@ -108,6 +108,17 @@ function videoRoomView(){
   'AI CEO điều phối nghiên cứu tham chiếu → viết kịch bản → kiểm duyệt → chuẩn bị storyboard. Chưa tự render hoặc đăng MP4.',
   eButton('👑 Giao brief sản phẩm','onclick="showMissionForm()"'))}
  <div class="video-flow"><span>🔎 Nghiên cứu TikTok</span><b>→</b><span>✍️ Biên kịch</span><b>→</b><span>🛡️ Kiểm duyệt</span><b>→</b><span>🎬 Phòng Video AI</span></div>
+
+ <section class="panel padded veo-base-panel">
+ <div class="video-work-top"><div><h3>🧩 Prompt gốc Google Veo 3</h3>
+ <p class="tagline">Dán prompt gốc bạn cung cấp. Các nhiệm vụ sản phẩm tạo sau dùng mẫu này để biến tấu nhiều kịch bản.</p></div>
+ <span class="video-stage">${data.veo_template?.trim()?'Đã lưu mẫu':'Chưa có mẫu'}</span></div>
+ <details><summary>${data.veo_template?.trim()?'Xem / chỉnh prompt mẫu':'Dán prompt Veo 3 mẫu của tôi'}</summary>
+ <div class="field"><label for="veoTemplateTextarea">Mẫu Veo 3 · tối đa 16.000 ký tự</label>
+ <textarea id="veoTemplateTextarea" rows="8" maxlength="16000" placeholder="Dán prompt; có thể dùng {product_name}, {ingredients}">${h(data.veo_template||'')}</textarea></div>
+ <div class="video-card-actions"><button type="button" class="primary-btn" onclick="saveVeoTemplate()">💾 Lưu prompt mẫu</button></div>
+ <div class="note">Lưu database cục bộ. Nhiệm vụ tạo mới giữ bản mẫu tại thời điểm giao việc. AI được phép biến tấu, không sao chép máy móc.</div></details></section>
+
  ${results.length?results.map(v=>{
  const brief=(data.video_briefs||{})[v.mission_id]||{};
  const badges=(brief.assets||[]).map(a=>`<a href="/api/mission-asset?mission_id=${v.mission_id}&asset_id=${a.id}" target="_blank" rel="noopener noreferrer">${a.kind==='image3d'?'🖼️ Ảnh 3D':'📄 Hồ sơ công bố'}: ${h(a.filename)}</a>`).join(' · ');
@@ -120,10 +131,36 @@ function videoRoomView(){
  </article>`;}).join(''):empty('🎬','Chưa có dự án video','Giao brief sản phẩm cho AI CEO để khởi chạy quy trình.')}
  <div class="note">Các URL TikTok chỉ được lưu làm tham chiếu. Nghiên cứu nội dung cần ghi chú hoặc transcript mà chủ cung cấp; hệ thống không tự truy cập video riêng tư. Giấy công bố chưa được xác nhận pháp lý chỉ là tư liệu tham khảo.</div>`;
 }
+async function saveVeoTemplate(){
+ const input=$('#veoTemplateTextarea');if(!input)return;
+ try{
+  const result=await api('content/veo-template',{template:input.value});
+  toast(result.message||'Đã lưu prompt mẫu Veo 3');await refresh();
+ }catch(e){toast('Không lưu được mẫu: '+e.message,true)}
+}
+function commerceFor(id){
+ return (data.commerce_outputs||[]).find(x=>x.mission_id===id)||{};
+}
+function commerceScenes(id){
+ try{
+  const raw=JSON.parse(commerceFor(id).veo_prompts||'');
+  return Array.isArray(raw.scenes)?raw.scenes:[];
+ }catch(_){return []}
+}
+function copyCommerce(id,key,scene=0){
+ const c=commerceFor(id);let content=String(c[key]||'');
+ if(key==='veo_prompts'&&scene){
+  const row=commerceScenes(id).find(x=>x.scene===scene);
+  content=row?.veo_prompt||'';
+ }
+ if(!content){toast('Nội dung chưa sẵn sàng',true);return}
+ copyText(content);
+}
 function showVideoRoomDetail(id){
  const v=(data.video_productions||[]).find(x=>x.mission_id===id);
  if(!v)return;
  const brief=(data.video_briefs||{})[id]||{};
+ const commerce=commerceFor(id), scenes=commerceScenes(id);
  const status=v.status==='awaiting_video_render'?'Sẵn sàng đưa vào công cụ tạo video sau khi chủ duyệt':
   v.status==='needs_review'?'Tạm dừng: cần kiểm duyệt/chỉnh sửa':'Đang trong quy trình';
  const part=(title,txt)=>`<details class="video-detail-section"><summary>${title}</summary><pre>${h(txt||'Chưa có kết quả')}</pre></details>`;
