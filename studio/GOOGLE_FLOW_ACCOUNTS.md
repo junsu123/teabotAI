@@ -90,3 +90,13 @@ Liên kết lưu lâu dài: `flow_jobs.email` → `flow_browser_profiles.email` 
 - Profile nào hiện còn một cửa sổ Chrome đang mở sẽ được **bỏ qua**, tránh hỏng profile hoặc xung đột khóa. Đóng Chrome rồi bấm Reload lại nếu muốn kiểm tra profile đó.
 - Bảng hiển thị tiến độ Reload và thông báo kết quả cập nhật/lỗi/bỏ qua. Nếu đọc được chữ tín dụng, lưu điểm, nguồn `browser_dom` và thời gian kiểm tra; nếu không đọc được thì **không ghi đè số dư cũ**.
 - Đây là cách đọc chữ đang hiển thị, không phải API chính thức của Google Flow. Google có thể thay đổi giao diện hoặc yêu cầu xác minh đăng nhập. Chỉ sử dụng với các tài khoản bạn sở hữu và trong giới hạn quyền được phép.
+
+## Thêm một Gmail → đăng nhập → xác minh điểm → tự đóng Chrome
+
+- Bấm **+ Thêm tài khoản**, nhập một Gmail rồi **Tạo profile & mở Flow**. Phần mềm tạo (hoặc dùng lại) thư mục Chrome profile riêng và mở cửa sổ Chrome có thể thao tác đăng nhập bằng tay.
+- Trình theo dõi chỉ đọc thông tin đang hiển thị trên trang Flow: liên kết AccountChooser cung cấp **địa chỉ Gmail đầy đủ**, phần tử `credits-count` hiển thị **tín dụng**. Chỉ khi Gmail đúng với tài khoản đã đăng ký và giá trị số hợp lệ, phần mềm mới lưu điểm vào SQLite và **đóng cửa sổ Chrome được quản lý**.
+- Browser tự lưu và tái sử dụng cookie/phiên đăng nhập trong thư mục profile. Phần mềm **không xuất hoặc nhân bản cookie đăng nhập**, không gửi chúng đến API hoặc tệp văn bản.
+- Trạng thái ở bảng Flow: chờ đăng nhập, đang xác minh, nhầm Gmail, đã cập nhật tín dụng, hoặc không thể theo dõi.
+- **Giới hạn:** Một số quy trình đăng nhập Google có thể từ chối Chrome được điều khiển bằng Playwright. Nếu gặp tình huống này, dùng nút **◎** để mở Chrome thường, đăng nhập thủ công và đóng lại, sau đó dùng **↻** để kiểm tra tín dụng. Chế độ dự phòng này không tự đóng cửa sổ.
+- Nếu không xác minh được Gmail hoặc không thấy tín dụng, phần mềm **không đóng tự động với lý do thành công** và không ghi dữ liệu không xác minh. Bạn có thể tiếp tục thao tác hoặc đóng cửa sổ thủ công.
+- Việc xác minh dựa trên bố cục hiện tại của Google Flow, **không phải API Google hỗ trợ chính thức**. Cần kiểm tra thực tế trên Windows sau khi cập nhật phần mềm.
