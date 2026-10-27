@@ -479,6 +479,8 @@ class Handler(BaseHTTPRequestHandler):
     return json_reply(self,flow_profiles.launch_for_email(DB,body.get('email')))
    if path=='/api/flow/jobs/open-profile':
     return json_reply(self,flow_profiles.launch_for_job(DB,body.get('job_id')))
+   if path=='/api/flow/profiles/check-credits':
+    return json_reply(self,flow_profiles.request_credit_check(DB,body.get('email')))
    if path=='/api/flow/accounts/balance':
     return json_reply(self,flow_accounts.update_balance(DB,
          body.get('email'),body.get('balance'),body.get('profile_label')))
