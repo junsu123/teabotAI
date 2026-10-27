@@ -86,6 +86,66 @@ class FlowEnrollmentTests(unittest.TestCase):
         self.assertEqual(flow_profiles.ensure_profile(
             self.db,"existing@gmail.com",self.profiles)["profile_id"],current["profile_id"])
 
+    def test_worker_uses_normal_installed_chrome_and_saved_profile(self):
+        r = None
+        with mock.patch.object(flow_enrollment.subprocess, "Popen") as create:
+            r = flow_enrollment.start(self.db, self.profiles, self.records)
+        eid = r["enrollment_id"]
+        token = (self.profiles/eid/flow_profiles.LOCK_NAME).read_text(encoding="utf-8")
+        with (mock.patch.object(flow_enrollment.flow_profiles, "chrome_binary",
+                                return_value="C:/Chrome/chrome.exe"),
+              mock.patch.object(flow_enrollment.subprocess, "Popen") as launch,
+              mock.patch.object(flow_enrollment, "inspect_logged_in_profile",
+                                return_value=("owner@gmail.com", 996)) as inspect):
+            launch.return_value.wait.return_value = 0
+            flow_enrollment.worker(self.db, eid, token, self.profiles, self.records)
+            args = launch.call_args.args[0]
+            self.assertEqual(args[0], "C:/Chrome/chrome.exe")
+            self.assertTrue(any(part.startswith("--user-data-dir=") for part in args))
+            self.assertFalse(any("no-sandbox" in part or "remote-debugging" in part
+                                 for part in args))
+            inspect.assert_called_once()
+        self.assertEqual(flow_accounts.list_accounts(self.db)[0]["email"],
+                         "owner@gmail.com")
+        self.assertEqual(flow_accounts.list_accounts(self.db)[0]["balance"], 996)
+        self.assertEqual(flow_enrollment.get_status(eid, self.records)["status"], "completed")
+        self.assertTrue((self.profiles/eid).exists())
+
+    def test_worker_preserves_chrome_profile_when_inspection_fails(self):
+        with mock.patch.object(flow_enrollment.subprocess, "Popen"):
+            eid = flow_enrollment.start(self.db, self.profiles, self.records)["enrollment_id"]
+        token = (self.profiles/eid/flow_profiles.LOCK_NAME).read_text(encoding="utf-8")
+        with (mock.patch.object(flow_enrollment.flow_profiles, "chrome_binary",
+                                return_value="C:/Chrome/chrome.exe"),
+              mock.patch.object(flow_enrollment.subprocess, "Popen"),
+              mock.patch.object(flow_enrollment, "inspect_logged_in_profile",
+                                side_effect=ValueError("login required"))):
+            flow_enrollment.worker(self.db, eid, token, self.profiles, self.records)
+        self.assertEqual(flow_enrollment.get_status(eid, self.records)["status"],
+                         "needs_manual")
+        self.assertTrue((self.profiles/eid).is_dir())
+        self.assertFalse((self.profiles/eid/flow_profiles.LOCK_NAME).exists())
+        saved = flow_enrollment.complete_manually(
+            self.db, eid, "owner@gmail.com", 50, self.profiles, self.records)
+        self.assertEqual(saved["status"], "completed")
+        self.assertEqual(flow_accounts.list_accounts(self.db)[0]["balance"], 50)
+
+    def test_manually_confirmed_profile_cannot_be_reassigned(self):
+        with mock.patch.object(flow_enrollment.subprocess, "Popen"):
+            eid = flow_enrollment.start(self.db, self.profiles, self.records)["enrollment_id"]
+        flow_enrollment.save_status(
+            eid, "needs_manual", "Need confirmation", records_dir=self.records)
+        with self.assertRaisesRegex(ValueError, "đóng Chrome"):
+            flow_enrollment.complete_manually(
+                self.db, eid, "owner@gmail.com", 50, self.profiles, self.records)
+        (self.profiles/eid/flow_profiles.LOCK_NAME).unlink()
+        saved = flow_enrollment.complete_manually(
+            self.db, eid, "owner@gmail.com", 50, self.profiles, self.records)
+        self.assertEqual(saved["status"], "completed")
+        with self.assertRaises(ValueError):
+            flow_enrollment.complete_manually(
+                self.db, eid, "other@gmail.com", 50, self.profiles, self.records)
+
     def test_status_endpoint_never_exposes_chrome_cookie(self):
         eid="c"*32
         flow_enrollment.save_status(eid,"completed","Đã lưu",
