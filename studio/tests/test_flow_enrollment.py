@@ -63,12 +63,13 @@ class FlowEnrollmentTests(unittest.TestCase):
         self.assertEqual(flow_profiles.ensure_profile(
             self.db, "owner@gmail.com", self.profiles)["profile_id"], original["profile_id"])
 
-    def test_worker_opens_normal_chrome_without_playwright_or_extension(self):
+    def test_worker_uses_private_cdp_and_falls_back_to_uia_without_extension(self):
         eid, token, _ = self.new_enrollment()
         browser_window = mock.Mock()
         with (mock.patch.object(flow_enrollment.flow_profiles, "chrome_binary",
                                 return_value="C:/Chrome/chrome.exe"),
               mock.patch.object(flow_enrollment.subprocess, "Popen") as launch,
+              mock.patch("flow_dom.wait_for_dom_account",return_value=None) as dom,
               mock.patch("flow_uia.wait_for_visible_account",
                          return_value=("owner@gmail.com", 996, browser_window)) as read,
               mock.patch("flow_uia.close_owned_window", return_value=True) as close):
@@ -78,8 +79,10 @@ class FlowEnrollmentTests(unittest.TestCase):
             cmd = launch.call_args.args[0]
             self.assertEqual(cmd[0], "C:/Chrome/chrome.exe")
             self.assertTrue(any(part.startswith("--user-data-dir=") for part in cmd))
-            self.assertFalse(any("no-sandbox" in part or "remote-debugging" in part
-                                 or "load-extension" in part for part in cmd))
+            self.assertFalse(any("no-sandbox" in part or "load-extension" in part for part in cmd))
+            self.assertIn("--remote-debugging-port=0",cmd)
+            self.assertIn("--remote-debugging-address=127.0.0.1",cmd)
+            dom.assert_called_once()
             self.assertEqual(cmd[-1], flow_profiles.FLOW_URL)
             read.assert_called_once()
             close.assert_called_once_with(browser_window, 1234)
@@ -90,11 +93,34 @@ class FlowEnrollmentTests(unittest.TestCase):
         self.assertTrue((self.profiles / eid).is_dir())
         self.assertFalse((self.profiles / eid / flow_profiles.LOCK_NAME).exists())
 
+    def test_worker_uses_dom_verified_email_and_closes_owned_window(self):
+        eid,token,_=self.new_enrollment()
+        window=mock.Mock()
+        with (mock.patch.object(flow_enrollment.flow_profiles,"chrome_binary",
+                                return_value="C:/Chrome/chrome.exe"),
+              mock.patch.object(flow_enrollment.subprocess,"Popen") as launch,
+              mock.patch("flow_dom.wait_for_dom_account",
+                         return_value=("owner@gmail.com",50,window,"browser_dom")) as dom,
+              mock.patch("flow_uia.close_owned_window",return_value=True) as closed,
+              mock.patch("flow_uia.wait_for_visible_account") as legacy):
+            launch.return_value.pid=2345
+            launch.return_value.wait.return_value=0
+            flow_enrollment.worker(self.db,eid,token,self.profiles,self.records)
+            dom.assert_called_once()
+            legacy.assert_not_called()
+            closed.assert_called_once_with(window,2345)
+        rows=flow_accounts.list_accounts(self.db)
+        self.assertEqual(rows[0]["email"],"owner@gmail.com")
+        self.assertEqual(rows[0]["balance"],50)
+        self.assertEqual(rows[0]["balance_source"],"browser_dom")
+        self.assertEqual(flow_enrollment.get_status(eid,self.records)["status"],"completed")
+
     def test_when_no_accessibility_data_profile_is_not_destroyed(self):
         eid, token, _ = self.new_enrollment()
         with (mock.patch.object(flow_enrollment.flow_profiles, "chrome_binary",
                                 return_value="C:/Chrome/chrome.exe"),
               mock.patch.object(flow_enrollment.subprocess, "Popen") as launch,
+              mock.patch("flow_dom.wait_for_dom_account",return_value=None),
               mock.patch("flow_uia.wait_for_visible_account", return_value=None)):
             launch.return_value.pid = 1345
             launch.return_value.wait.return_value = 0
