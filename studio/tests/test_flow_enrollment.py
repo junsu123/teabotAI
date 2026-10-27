@@ -86,49 +86,79 @@ class FlowEnrollmentTests(unittest.TestCase):
         self.assertEqual(flow_profiles.ensure_profile(
             self.db,"existing@gmail.com",self.profiles)["profile_id"],current["profile_id"])
 
-    def test_worker_uses_normal_installed_chrome_and_saved_profile(self):
-        r = None
-        with mock.patch.object(flow_enrollment.subprocess, "Popen") as create:
-            r = flow_enrollment.start(self.db, self.profiles, self.records)
-        eid = r["enrollment_id"]
-        token = (self.profiles/eid/flow_profiles.LOCK_NAME).read_text(encoding="utf-8")
-        with (mock.patch.object(flow_enrollment.flow_profiles, "chrome_binary",
-                                return_value="C:/Chrome/chrome.exe"),
-              mock.patch.object(flow_enrollment.subprocess, "Popen") as launch,
-              mock.patch.object(flow_enrollment, "inspect_logged_in_profile",
-                                return_value=("owner@gmail.com", 996)) as inspect):
-            launch.return_value.wait.return_value = 0
-            flow_enrollment.worker(self.db, eid, token, self.profiles, self.records)
-            args = launch.call_args.args[0]
-            self.assertEqual(args[0], "C:/Chrome/chrome.exe")
-            self.assertTrue(any(part.startswith("--user-data-dir=") for part in args))
-            self.assertFalse(any("no-sandbox" in part or "remote-debugging" in part
-                                 for part in args))
-            inspect.assert_called_once()
-        self.assertEqual(flow_accounts.list_accounts(self.db)[0]["email"],
-                         "owner@gmail.com")
-        self.assertEqual(flow_accounts.list_accounts(self.db)[0]["balance"], 996)
-        self.assertEqual(flow_enrollment.get_status(eid, self.records)["status"], "completed")
-        self.assertTrue((self.profiles/eid).exists())
-
-    def test_worker_preserves_chrome_profile_when_inspection_fails(self):
+    def test_extension_report_stores_gmail_credit_and_prevents_replay(self):
         with mock.patch.object(flow_enrollment.subprocess, "Popen"):
-            eid = flow_enrollment.start(self.db, self.profiles, self.records)["enrollment_id"]
-        token = (self.profiles/eid/flow_profiles.LOCK_NAME).read_text(encoding="utf-8")
-        with (mock.patch.object(flow_enrollment.flow_profiles, "chrome_binary",
+            item=flow_enrollment.start(self.db,self.profiles,self.records)
+        eid=item["enrollment_id"]
+        token=(self.profiles/eid/flow_profiles.LOCK_NAME).read_text(encoding="utf-8")
+        with self.assertRaises(ValueError):
+            flow_enrollment.capture_from_extension(
+                self.db,eid,"f"*32,"owner@gmail.com",996,self.profiles,self.records)
+        result=flow_enrollment.capture_from_extension(
+            self.db,eid,token,"owner@gmail.com",996,self.profiles,self.records)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"],"completed")
+        self.assertEqual(flow_enrollment.get_status(eid,self.records)["credits"],996)
+        self.assertEqual(flow_accounts.list_accounts(self.db)[0]["balance"],996)
+        self.assertEqual(flow_profiles.ensure_profile(
+            self.db,"owner@gmail.com",self.profiles)["profile_id"],eid)
+        with self.assertRaises(ValueError):
+            flow_enrollment.capture_from_extension(
+                self.db,eid,token,"other@gmail.com",100,self.profiles,self.records)
+
+    def test_extension_duplicate_does_not_replace_existing_profile(self):
+        flow_accounts.add_accounts(self.db,"owner@gmail.com")
+        original=flow_profiles.ensure_profile(self.db,"owner@gmail.com",self.profiles)
+        flow_accounts.update_balance(self.db,"owner@gmail.com",50)
+        with mock.patch.object(flow_enrollment.subprocess,"Popen"):
+            item=flow_enrollment.start(self.db,self.profiles,self.records)
+        eid=item["enrollment_id"]
+        token=(self.profiles/eid/flow_profiles.LOCK_NAME).read_text(encoding="utf-8")
+        result=flow_enrollment.capture_from_extension(
+            self.db,eid,token,"owner@gmail.com",996,self.profiles,self.records)
+        self.assertEqual(result["status"],"duplicate")
+        self.assertEqual(flow_accounts.list_accounts(self.db)[0]["balance"],50)
+        self.assertEqual(flow_profiles.ensure_profile(
+            self.db,"owner@gmail.com",self.profiles)["profile_id"],original["profile_id"])
+
+    def test_worker_launches_normal_chrome_with_pair_page_and_no_unsafe_flags(self):
+        with mock.patch.object(flow_enrollment.subprocess,"Popen"):
+            item=flow_enrollment.start(self.db,self.profiles,self.records)
+        eid=item["enrollment_id"]
+        token=(self.profiles/eid/flow_profiles.LOCK_NAME).read_text(encoding="utf-8")
+        with (mock.patch.object(flow_enrollment.flow_profiles,"chrome_binary",
                                 return_value="C:/Chrome/chrome.exe"),
-              mock.patch.object(flow_enrollment.subprocess, "Popen"),
-              mock.patch.object(flow_enrollment, "inspect_logged_in_profile",
-                                side_effect=ValueError("login required"))):
-            flow_enrollment.worker(self.db, eid, token, self.profiles, self.records)
-        self.assertEqual(flow_enrollment.get_status(eid, self.records)["status"],
-                         "needs_manual")
+              mock.patch.object(flow_enrollment.subprocess,"Popen") as launch):
+            def simulate_extension():
+                flow_enrollment.capture_from_extension(
+                    self.db,eid,token,"owner@gmail.com",996,self.profiles,self.records)
+                return 0
+            launch.return_value.wait.side_effect=simulate_extension
+            flow_enrollment.worker(self.db,eid,token,self.profiles,self.records)
+            cmd=launch.call_args.args[0]
+            self.assertEqual(cmd[0],"C:/Chrome/chrome.exe")
+            self.assertTrue(any("--user-data-dir=" in x for x in cmd))
+            self.assertTrue(any("/flow-extension-pair?" in x for x in cmd))
+            self.assertFalse(any("no-sandbox" in x or "remote-debugging" in x for x in cmd))
+        self.assertEqual(flow_enrollment.get_status(eid,self.records)["status"],"completed")
         self.assertTrue((self.profiles/eid).is_dir())
         self.assertFalse((self.profiles/eid/flow_profiles.LOCK_NAME).exists())
-        saved = flow_enrollment.complete_manually(
-            self.db, eid, "owner@gmail.com", 50, self.profiles, self.records)
-        self.assertEqual(saved["status"], "completed")
-        self.assertEqual(flow_accounts.list_accounts(self.db)[0]["balance"], 50)
+
+    def test_worker_preserves_profile_on_browser_close_without_extension(self):
+        with mock.patch.object(flow_enrollment.subprocess,"Popen"):
+            eid=flow_enrollment.start(self.db,self.profiles,self.records)["enrollment_id"]
+        token=(self.profiles/eid/flow_profiles.LOCK_NAME).read_text(encoding="utf-8")
+        with (mock.patch.object(flow_enrollment.flow_profiles,"chrome_binary",
+                                return_value="C:/Chrome/chrome.exe"),
+              mock.patch.object(flow_enrollment.subprocess,"Popen") as launch):
+            launch.return_value.wait.return_value=0
+            flow_enrollment.worker(self.db,eid,token,self.profiles,self.records)
+        self.assertEqual(flow_enrollment.get_status(eid,self.records)["status"],"needs_manual")
+        self.assertTrue((self.profiles/eid).is_dir())
+        self.assertFalse((self.profiles/eid/flow_profiles.LOCK_NAME).exists())
+        saved=flow_enrollment.complete_manually(
+            self.db,eid,"owner@gmail.com",50,self.profiles,self.records)
+        self.assertEqual(saved["status"],"completed")
 
     def test_manually_confirmed_profile_cannot_be_reassigned(self):
         with mock.patch.object(flow_enrollment.subprocess, "Popen"):

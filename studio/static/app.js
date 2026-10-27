@@ -114,6 +114,7 @@ function organigram(){return `<div style="padding:23px;display:flex;align-items:
 function zoom(by){sceneScale=Math.max(.65,Math.min(1.6,sceneScale+by));if($('#marsSvg'))$('#marsSvg').style.transform=`scale(${sceneScale})`}
 function agentsView(){return `${pageHead('♟ TEAM MANAGEMENT','Nhân viên <span class="gradient-text">AI</span>','Phòng ban chỉ nhận việc qua AI CEO; bạn không giao việc trực tiếp.',eButton('👑 Giao việc cho CEO','onclick="showMissionForm()"'))}<div class="agents-cards">${data.agents.map(a=>`<div class="agent-card" onclick="openAgent('${a.id}')"><div class="portrait" style="background:${a.color}22;border:1px solid ${a.color}66">${a.emoji}</div><h3>${a.name}</h3><p>${a.role}</p><div class="bottom"><span>● Cấu hình sẵn</span><span>Xem nhiệm vụ ↗</span></div></div>`).join('')}</div><div class="note" style="margin-top:20px">Các agent là những vai trò logic trong phần mềm. Để xử lý AI thực sự, bạn phải cài Ollama và cấu hình workflow trong mã nguồn Python; trạng thái này không có nghĩa AI đang chạy nền.</div>`}
 let flowCurrentEnrollment=null;
+let flowExtensionPath='';
 let flowEnrollmentStarting=false;
 const flowEnrollmentBusy = () => flowEnrollmentStarting ||
   ['opening','signin_pending','inspecting','capturing'].includes(flowCurrentEnrollment?.status);
@@ -186,8 +187,9 @@ function flowView(){
  <section class="flow-surface">
   <header class="flow-section-header">↧ &nbsp; Thêm tài khoản mới</header>
   <div class="flow-pad">
-   <p class="flow-green-note">Nhấn + Thêm tài khoản để mở Google Chrome thông thường. Đăng nhập Google Flow, sau đó đóng cửa sổ Chrome để phần mềm thử đọc Gmail và tín dụng. Không sử dụng Chrome tự động hóa trong bước đăng nhập.</p>
+   <p class="flow-green-note">Nhấn + Thêm tài khoản để mở Chrome thật. Cài tiện ích TEA Mars cho profile mới (một lần), ghép kết nối rồi đăng nhập Google Flow; ứng dụng sẽ tự đọc Gmail, tín dụng và đóng Chrome khi thành công.</p>
    ${flowCurrentEnrollment?`<div class="flow-enrollment-status" role="status"><strong>Chrome profile mới: ${h(flowCurrentEnrollment.status||'opening')}</strong><span>${h(flowCurrentEnrollment.message||'Đang mở Chrome...')}</span>${flowCurrentEnrollment.email?`<span>Gmail: ${h(flowCurrentEnrollment.email)} · Tín dụng: ${h(String(flowCurrentEnrollment.credits??'—'))}</span>`:''}
+     ${flowExtensionPath&&['opening','signin_pending'].includes(flowCurrentEnrollment.status)?`<div class="flow-extension-setup"><b>Cài tiện ích để tự lấy Gmail và điểm:</b><span>Mở <code>chrome://extensions</code> trong cửa sổ Chrome vừa tạo, bật Developer Mode, chọn <b>Load unpacked</b> và chọn thư mục:</span><code>${h(flowExtensionPath)}</code><button class="flow-btn outline" type="button" onclick="flowCopyExtensionPath()">Sao chép đường dẫn</button><span>Quay lại tab <b>Ghép Chrome với TEA Mars</b>, nhấn F5. Sau đó quay lại Flow, nhấn F5, đăng nhập và mở menu tài khoản để hiển thị Gmail/điểm. Chrome sẽ tự đóng sau khi lưu.</span></div>`:''}
      ${flowCurrentEnrollment.status==='needs_manual'?`<div class="flow-enrollment-fallback"><p>Chrome đã lưu phiên, nhưng không đọc được thông tin tự động. Chỉ trong trường hợp này, nhập Gmail và điểm bạn nhìn thấy trong Google Flow để gắn vào profile đã đăng nhập.</p><input id="flowEnrollEmail" type="email" placeholder="Gmail đã đăng nhập" autocomplete="off"><input id="flowEnrollCredits" type="number" placeholder="Tín dụng Flow" min="0" step="1"><button class="flow-btn blue" type="button" onclick="flowConfirmEnrollment()">Lưu profile đã đăng nhập</button></div>`:''}
      </div>`:''}
    <div class="flow-proxy-bar">
@@ -199,7 +201,7 @@ function flowView(){
    <div class="flow-add-cards">
     <div class="flow-add-card">
       <b>Đăng nhập trình duyệt</b>
-      <p class="flow-green-note small">Nhấn + Thêm tài khoản để mở Chrome thật. Bạn đăng nhập và đóng Chrome; sau đó phần mềm thử đọc email, tín dụng từ phiên đã lưu. Không cần nhập Gmail trước.</p>
+      <p class="flow-green-note small">Tạo Chrome profile trống, không cần Gmail. Để tự đọc Gmail/tín dụng và đóng Chrome, hãy cài tiện ích TEA Mars trong profile vừa tạo.</p>
       <div class="flow-card-buttons">
        <button id="flowAddAccountButton" class="flow-btn ${flowEnrollmentBusy()?'flow-opening':'blue'}" type="button" onclick="flowEnrollAccount()" ${flowEnrollmentBusy()?'disabled aria-busy="true"':'aria-busy="false"'}>${flowEnrollmentBusy()?'＋ Đang mở trình duyệt...':'＋ Thêm tài khoản'}</button>
        <button class="flow-btn purple" type="button" onclick="flowShowAddForm(true)">＋ Thêm theo danh sách</button>
@@ -272,6 +274,7 @@ async function flowEnrollAccount(){
  try{
   const r=await api('flow/enrollments/start',{});
   flowCurrentEnrollment={id:r.enrollment_id,status:'opening',message:r.message};
+  flowExtensionPath=r.extension_path||'';
   toast('Đang mở Chrome profile mới để bạn đăng nhập Google Flow');
   await refresh();
   flowWatchEnrollment(r.enrollment_id);
@@ -327,6 +330,13 @@ async function flowConfirmEnrollment(){
   toast('Đã gắn tài khoản '+result.email+' vào Chrome profile đã đăng nhập.');
   await refresh();
  }catch(e){toast(e.message,true)}
+}
+function flowCopyExtensionPath(){
+ if(!flowExtensionPath){toast('Chưa có đường dẫn tiện ích',true);return}
+ navigator.clipboard.writeText(flowExtensionPath).then(
+  ()=>toast('Đã sao chép đường dẫn tiện ích Chrome'),
+  ()=>toast('Không thể sao chép. Bạn có thể chọn và sao chép đường dẫn hiển thị.',true)
+ );
 }
 function flowShowAddForm(bulk){
  const area=$('#flowAddForm'),field=$('#flowEmailList'),label=$('#flowAddLabel');

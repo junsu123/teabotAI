@@ -124,3 +124,46 @@ Google có thể trả về `Couldn't sign you in` khi Playwright trực tiếp 
 - **Không thể bảo đảm tự đóng cửa sổ ngay khi đăng nhập** nếu không điều khiển Chrome trong bước đăng nhập; phiên bản an toàn này yêu cầu bạn tự đóng Chrome rồi mới đọc dữ liệu.
 - Chrome tiếp tục tự quản lý cookie trong thư mục riêng, không xuất cookie thô ra phần mềm, GitHub hoặc file JSON.
 - Tài khoản đăng nhập với Chrome đã qua kiểm tra thủ công vẫn có thể bị Google yêu cầu đăng nhập lại; không có cơ chế vượt qua chính sách bảo mật Google.
+
+
+## Sửa lỗi không lấy Gmail/điểm và không tự đóng Chrome (28/10/2026)
+
+**Nguyên nhân cũ:** Đăng nhập diễn ra trong Google Chrome thông thường, nhưng sau
+khi đóng cửa sổ, ứng dụng lại khởi động Chrome qua Playwright *lần thứ hai* để
+đọc nội dung. Cách này thường không nhìn thấy tài khoản, dữ liệu tải không xong
+hoặc bị Google hạn chế. Ứng dụng cũng không thể tự đóng cửa sổ khi hoàn thành
+vì nó chỉ đọc dữ liệu sau khi bạn chủ động đóng.
+
+**Cách mới (cần cài tiện ích trong mỗi Chrome profile mới):**
+
+1. Bấm **+ Thêm tài khoản**; Mars Studio tạo Chrome profile trống và mở
+   một tab **Ghép Chrome với TEA Mars** cùng tab Google Flow.
+2. Trong Chrome **của profile vừa tạo**, vào `chrome://extensions/`,
+   bật **Developer Mode**, chọn **Load unpacked** và thư mục:
+   `studio/flow_extension/` (trong project teabotAI; UI hiển thị đường
+   dẫn tuyệt đối).
+3. Trở về tab **Ghép Chrome với TEA Mars**, bấm **F5**. Phải thấy thông báo
+   đã ghép. Trở về tab **Google Flow**, bấm **F5** sau khi cài tiện ích.
+4. Đăng nhập Google bằng Chrome thường. Nhấn vào ảnh tài khoản nếu cần để
+   hiển thị email và tín dụng.
+5. Tiện ích chỉ đọc **nội dung hiện trên trang Flow**:
+   `.user-email` và `.credits-count`. Nó gửi đúng **email và số điểm**
+   cùng mã ghép tạm về `127.0.0.1`. Không đọc cookie, mật khẩu, token,
+   mã OTP, lịch sử hay network payload.
+6. Backend kiểm tra mã ghép + dữ liệu, lưu Gmail/điểm gắn với đúng thư mục
+   Chrome profile rồi phản hồi thành công. **Chỉ sau bước lưu thành công**
+   tiện ích mới đóng cửa sổ Chrome bằng API chính thức của Chrome.
+7. Nếu đã đăng nhập mà chưa thấy phản hồi, hãy kiểm tra tab ghép, tải lại
+   tab Flow và mở menu tài khoản để các trường hiện ra. Nếu không cài tiện
+   ích, bạn vẫn có thể **tự đóng Chrome** rồi xác nhận Gmail/điểm bằng
+   form dự phòng, profile đã đăng nhập không bị xóa.
+
+**Lưu ý:** Từ Chrome 137, `--load-extension` không hoạt động trong bản Google
+Chrome chính thức. Vì vậy người dùng **cần chủ động cài tiện ích một lần cho
+mỗi Chrome profile**; không thể tự ý cài ngầm bằng cờ mở trình duyệt. Đây là
+tiện ích mã nguồn mở đặt ngay trong repository, chỉ có quyền đọc hai trường
+hiển thị trên Google Flow và liên lạc với Mars Studio cục bộ.
+
+Không tự động tạo video, không sửa quyền xác thực Google, không vượt CAPTCHA
+hoặc giới hạn tín dụng. Chưa thử Chrome trên Windows thật; kiểm thử CI chỉ
+xác minh thuật toán và tuyến API trong mô phỏng.

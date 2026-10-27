@@ -18,6 +18,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from datetime import datetime
 from urllib.parse import urlparse, parse_qs
+from html import escape as html_escape
 
 ROOT=Path(__file__).resolve().parent
 STATIC=ROOT/'static'
@@ -206,6 +207,11 @@ def json_reply(handler, obj, status=200):
  b=json.dumps(obj,ensure_ascii=False).encode('utf-8')
  handler.send_response(status);handler.send_header('Content-Type','application/json; charset=utf-8')
  handler.send_header('Cache-Control','no-store');handler.send_header('X-Content-Type-Options','nosniff')
+ origin=handler.headers.get('Origin','')
+ if (urlparse(handler.path).path=='/api/flow/enrollments/capture'
+     and re.fullmatch(r'chrome-extension://[a-p]{32}',origin)):
+  handler.send_header('Access-Control-Allow-Origin',origin)
+  handler.send_header('Vary','Origin')
  handler.send_header('Content-Length',str(len(b)));handler.end_headers();handler.wfile.write(b)
 
 def error_reply(handler, code, msg):json_reply(handler,{'ok':False,'error':str(msg)},code)
@@ -220,9 +226,58 @@ class Handler(BaseHTTPRequestHandler):
   # Reject DNS-rebinding attempts at accessing the machine-local control panel.
   host=self.headers.get('Host','').split(':',1)[0].lower()
   return host in ('127.0.0.1','localhost')
+ def do_OPTIONS(self):
+  origin=self.headers.get('Origin','')
+  if (self.is_local_host()
+      and urlparse(self.path).path=='/api/flow/enrollments/capture'
+      and re.fullmatch(r'chrome-extension://[a-p]{32}',origin)
+      and self.headers.get('Access-Control-Request-Method')=='POST'):
+   self.send_response(204)
+   self.send_header('Access-Control-Allow-Origin',origin)
+   self.send_header('Access-Control-Allow-Methods','POST')
+   self.send_header('Access-Control-Allow-Headers','Content-Type, X-Tea-Flow-Extension')
+   self.send_header('Access-Control-Max-Age','300')
+   self.send_header('Vary','Origin')
+   self.end_headers();return
+  return error_reply(self,403,'Nguồn yêu cầu không hợp lệ')
  def do_GET(self):
   if not self.is_local_host():return error_reply(self,403,'Chỉ cho phép truy cập cục bộ')
   path=urlparse(self.path).path
+  if path=='/flow-extension-pair':
+   query=parse_qs(urlparse(self.path).query)
+   eid=query.get('id',[''])[0];token=query.get('token',[''])[0]
+   try:
+    folder=flow_enrollment.PROFILES/eid
+    if (not re.fullmatch('[a-f0-9]{32}',eid)
+        or not re.fullmatch('[a-f0-9]{32}',token)
+        or not (folder/flow_profiles.LOCK_NAME).is_file()
+        or (folder/flow_profiles.LOCK_NAME).read_text(encoding='utf-8')!=token):
+     raise ValueError('Không có phiên ghép hợp lệ')
+    folder_path=str((ROOT/'flow_extension').resolve())
+    markup=('<!DOCTYPE html><html lang="vi"><meta charset="utf-8">'
+     '<meta name="referrer" content="no-referrer"><title>Ghép Chrome với TEA Mars</title>'
+     '<style>body{font:17px Arial,sans-serif;background:#181c26;color:#eef4ff;'
+     'max-width:760px;margin:55px auto;line-height:1.6;padding:20px}'
+     'code{display:block;padding:12px;background:#303747;overflow-wrap:anywhere}'
+     'strong{color:#77efbc}</style>'
+     '<h2>Ghép profile Chrome với TEA AI Mars</h2>'
+     '<p>1. Trong chính Chrome này, mở <b>chrome://extensions</b>, bật Developer Mode;'
+     ' chọn Load unpacked và thư mục:</p><code>'+html_escape(folder_path)+'</code>'
+     '<p>2. Quay lại tab này và <b>nhấn F5</b>.</p>'
+     '<p id="pairStatus">Chờ bạn cài tiện ích và làm mới tab...</p>'
+     '<p>3. Quay lại tab Google Flow và đăng nhập. Mở menu tài khoản để hiện'
+     ' địa chỉ Gmail và số tín dụng. Tiện ích sẽ tự lưu hai giá trị đó rồi'
+     ' đóng cửa sổ Chrome khi thành công.</p>'
+     '<p>Tiện ích không đọc cookie, mật khẩu hoặc mã xác thực Google.</p></html>')
+    payload=markup.encode('utf-8')
+    self.send_response(200)
+    self.send_header('Content-Type','text/html; charset=utf-8')
+    self.send_header('Referrer-Policy','no-referrer')
+    self.send_header('Cache-Control','no-store')
+    self.send_header('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'")
+    self.send_header('Content-Length',str(len(payload)));self.end_headers()
+    self.wfile.write(payload);return
+   except (ValueError,OSError):return error_reply(self,403,'Không có phiên ghép hợp lệ')
   if path=='/api/overview':return json_reply(self,overview())
   if path=='/api/health':return json_reply(self,{'ok':True,'date':utc(),'version':'0.4.0','ceo_worker':'enabled'})
   if path=='/api/flow/profiles/reload-status':
@@ -293,7 +348,13 @@ class Handler(BaseHTTPRequestHandler):
  def do_POST(self):
   if not self.is_local_host():return error_reply(self,403,'Chỉ cho phép truy cập cục bộ')
   origin=self.headers.get('Origin','')
-  if origin and origin not in ('http://'+self.headers.get('Host',''),):
+  path=urlparse(self.path).path
+  if path=='/api/flow/enrollments/capture':
+   if (not re.fullmatch(r'chrome-extension://[a-p]{32}',origin)
+       or self.headers.get('X-Tea-Flow-Extension')!='1'
+       or self.headers.get('Content-Type','').split(';',1)[0].strip()!='application/json'):
+    return error_reply(self,403,'Chỉ tiện ích Chrome Flow đã ghép mới được cập nhật')
+  elif origin and origin not in ('http://'+self.headers.get('Host',''),):
    return error_reply(self,403,'Nguồn yêu cầu không hợp lệ')
   path=urlparse(self.path).path
   try:
@@ -476,7 +537,11 @@ class Handler(BaseHTTPRequestHandler):
     (TRAIN_DIR/(sid+'.stop')).touch()
     return json_reply(self,{'ok':True,'message':'Đã yêu cầu lưu và dừng phiên học'})
    if path=='/api/flow/enrollments/start':
-    return json_reply(self,flow_enrollment.start(DB))
+    port=int(self.headers.get('Host','127.0.0.1:8765').split(':')[-1])
+    return json_reply(self,flow_enrollment.start(DB,port=port))
+   if path=='/api/flow/enrollments/capture':
+    return json_reply(self,flow_enrollment.capture_from_extension(
+      DB,body.get('id'),body.get('token'),body.get('email'),body.get('credits')))
    if path=='/api/flow/enrollments/confirm':
     return json_reply(self,flow_enrollment.complete_manually(
         DB,body.get('id'),body.get('email'),body.get('credits')))
