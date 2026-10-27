@@ -31,6 +31,7 @@ import ceo_engine
 import agent_forum
 import product_video_workflow
 import commerce_content
+import flow_accounts
 import model_router
 import claude_provider
 import integration_settings
@@ -81,6 +82,7 @@ def init():
   ''')
  ceo_engine.setup(DB)
  product_video_workflow.setup(DB)
+ flow_accounts.setup(DB)
 
 def utc():return datetime.now().astimezone().isoformat(timespec='seconds')
 
@@ -180,6 +182,8 @@ def overview():
     'video_briefs':briefs,'video_productions':product_video_workflow.list_production(DB),
     'commerce_outputs':commerce_content.list_outputs(DB),
     'veo_template':commerce_content.template(DB),
+    'flow_accounts':flow_accounts.list_accounts(DB),
+    'flow_jobs':flow_accounts.list_jobs(DB),
     'learnings':list_learnings(), 'products':list_products(), 'proxies':proxy_store.all_proxies(), 'training':training_summary(),
     'ollama':ollama_health(),
     'model_routing':model_router.configuration_status(integration_settings.openai_env()),
@@ -460,6 +464,24 @@ class Handler(BaseHTTPRequestHandler):
     if not (TRAIN_DIR/(sid+'.status.json')).exists():raise ValueError('Không tìm thấy phiên học')
     (TRAIN_DIR/(sid+'.stop')).touch()
     return json_reply(self,{'ok':True,'message':'Đã yêu cầu lưu và dừng phiên học'})
+   if path=='/api/flow/accounts/add':
+    return json_reply(self,flow_accounts.add_accounts(DB,body.get('emails','')))
+   if path=='/api/flow/accounts/balance':
+    return json_reply(self,flow_accounts.update_balance(DB,
+         body.get('email'),body.get('balance'),body.get('profile_label')))
+   if path=='/api/flow/accounts/enabled':
+    return json_reply(self,flow_accounts.set_enabled(DB,
+         body.get('email'),body.get('enabled')))
+   if path=='/api/flow/jobs/queue':
+    return json_reply(self,flow_accounts.enqueue_from_mission(DB,
+         body.get('mission_id'),body.get('model')))
+   if path=='/api/flow/jobs/allocate':
+    return json_reply(self,flow_accounts.allocate(DB))
+   if path=='/api/flow/jobs/action':
+    if body.get('action')=='complete' and body.get('confirm_flow_success') is not True:
+     raise ValueError('Hãy xác nhận video đã được Google Flow thực sự tạo thành công.')
+    return json_reply(self,flow_accounts.job_action(DB,body.get('job_id'),
+          body.get('action'),body.get('completed_url','')))
    if path=='/api/content/veo-template':
     result=commerce_content.save_template(DB,body.get('template',''))
     return json_reply(self,result)
