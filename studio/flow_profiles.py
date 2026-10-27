@@ -592,10 +592,25 @@ def login_worker(db_path, email, token, profiles_dir=None):
             completed = False
             try:
                 page = context.pages[0] if context.pages else context.new_page()
-                page.goto(FLOW_URL, wait_until="domcontentloaded", timeout=60000)
+                try:
+                    page.goto(FLOW_URL, wait_until="domcontentloaded", timeout=60000)
+                except Exception:
+                    # A slow page/captcha may still be navigable by the owner.
+                    pass
                 completed = observe_login(
                     context, db_path, email,
                     lambda status, message: _write_status(folder, status, message))
+                if not completed:
+                    # Never automatically close a still-active manual sign-in
+                    # on timeout/mismatch. The user may finish or close Chrome.
+                    while True:
+                        alive = [p for p in context.pages if not p.is_closed()]
+                        if not alive:
+                            break
+                        try:
+                            alive[0].wait_for_timeout(1200)
+                        except Exception:
+                            break
             finally:
                 # On success close browser and leave the Chrome-owned session
                 # intact. On failure manual login is not reported as verified.
