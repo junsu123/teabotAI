@@ -3,7 +3,7 @@ const h = x => String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':
 const $ = s => document.querySelector(s);
 let data={agents:[],accounts:[],jobs:[],missions:[],learnings:[],products:{},proxies:[],training:[],stats:{}}, activeView='hq', focusAgent=null, sceneScale=1, sceneMode='mars';
 let forumMissionId=0,forumData=null,forumBusy=false;
-const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',video:'Xưởng SEO & Veo 3',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt Gemini / Groq / AI',dom:'Học đăng bài'};
+const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',video:'Xưởng SEO & Veo 3',flow:'Google Flow · Tín dụng',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt Gemini / Groq / AI',dom:'Học đăng bài'};
 async function api(endpoint, body=null){
  const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:endpoint.endsWith('/veo-template/sample')?130000:endpoint.endsWith('/test-saved-agent')?55000:endpoint.endsWith('/test-chat')?30000:endpoint.endsWith('/test')?20000:12000);
  const opts=body===null?{signal:ctrl.signal}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal};
@@ -113,6 +113,131 @@ function home(){const s=data.stats,ms=data.missions.slice(0,4);return `
 function organigram(){return `<div style="padding:23px;display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:23px;background:radial-gradient(ellipse at center,#1a4050,#09182e)"><div style="border:1px solid #54c5b5;padding:14px 34px;border-radius:13px;background:#164050">👑 <b>AI CEO</b></div><div style="height:20px;width:1px;background:#5fd6c4"></div><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;width:100%">${data.agents.filter(a=>a.id!=='ceo').map(a=>`<button class="small-btn" style="padding:17px;border-color:${a.color};text-align:center" onclick="openAgent('${a.id}')">${a.emoji}<br><b>${a.name}</b><br><small>${a.role}</small></button>`).join('')}</div></div>`}
 function zoom(by){sceneScale=Math.max(.65,Math.min(1.6,sceneScale+by));if($('#marsSvg'))$('#marsSvg').style.transform=`scale(${sceneScale})`}
 function agentsView(){return `${pageHead('♟ TEAM MANAGEMENT','Nhân viên <span class="gradient-text">AI</span>','Phòng ban chỉ nhận việc qua AI CEO; bạn không giao việc trực tiếp.',eButton('👑 Giao việc cho CEO','onclick="showMissionForm()"'))}<div class="agents-cards">${data.agents.map(a=>`<div class="agent-card" onclick="openAgent('${a.id}')"><div class="portrait" style="background:${a.color}22;border:1px solid ${a.color}66">${a.emoji}</div><h3>${a.name}</h3><p>${a.role}</p><div class="bottom"><span>● Cấu hình sẵn</span><span>Xem nhiệm vụ ↗</span></div></div>`).join('')}</div><div class="note" style="margin-top:20px">Các agent là những vai trò logic trong phần mềm. Để xử lý AI thực sự, bạn phải cài Ollama và cấu hình workflow trong mã nguồn Python; trạng thái này không có nghĩa AI đang chạy nền.</div>`}
+function flowView(){
+ const accounts=data.flow_accounts||[],jobs=data.flow_jobs||[];
+ const canQueue=(data.commerce_outputs||[]).filter(x=>x.status==='ready'&&x.veo_prompts);
+ const statusMap={queued:'Chưa có tài khoản đủ điểm',assigned:'Đã phân tài khoản – chờ thao tác Flow',
+  completed:'Người dùng xác nhận đã tạo',cancelled:'Đã hủy'};
+ let accountsHtml=accounts.map(a=>{
+  const bal=a.balance===null?'Chưa kiểm tra':a.balance+' điểm';
+  const verified=a.fresh?'Đã nhập gần đây':'Cần kiểm tra lại trên Flow';
+  return '<article class="flow-account" data-email="'+h(a.email)+'">'+
+   '<div class="video-work-top"><div><strong>'+h(a.email)+'</strong>'+
+   '<div class="tagline">'+h(a.profile_label||'Chưa đặt nhãn profile')+'</div></div>'+
+   '<span class="video-stage">'+(a.enabled?'Đang dùng':'Tạm tắt')+'</span></div>'+
+   '<div class="flow-balance"><b>'+h(bal)+'</b><span>Đã dành: '+a.reserved+
+   ' · Có thể dùng: '+(a.available===null?'?':a.available)+'</span></div>'+
+   '<div class="tagline">'+h(verified)+' · lần nhập: '+h(a.balance_checked_at||'Chưa có')+
+   ' · nguồn: '+h(a.verified_by||'thủ công')+'</div>'+
+   '<div class="flow-account-inputs"><input type="number" class="flow-credit-input" min="0" max="1000000" step="1" placeholder="Điểm Flow thực tế" aria-label="Nhập điểm Flow còn lại" value="'+(a.balance===null?'':a.balance)+'">'+
+   '<input type="text" class="flow-profile-input" maxlength="100" placeholder="Nhãn Chrome profile (không phải mật khẩu)" value="'+h(a.profile_label)+'">'+
+   '<button class="small-btn" type="button" onclick="flowSaveCredit(this)">Lưu điểm</button>'+
+   '<button class="small-btn" type="button" onclick="flowToggleAccount(this,'+(!a.enabled)+')">'+
+   (a.enabled?'Tạm ngưng':'Bật lại')+'</button></div></article>';
+ }).join('');
+ let jobsHtml=jobs.map(j=>{
+  const scene=Number(j.scene),id=Number(j.id);
+  return '<article class="flow-job"><div class="video-work-top"><div>'+
+   '<strong>Video '+id+' · Nhiệm vụ #'+j.mission_id+' · Cảnh '+scene+'/5</strong>'+
+   '<div class="tagline">'+h(j.model)+' · chi phí dự kiến '+j.credit_cost+' điểm/lượt tạo</div></div>'+
+   '<span class="video-stage">'+h(statusMap[j.status]||j.status)+'</span></div>'+
+   '<div class="tagline">Tài khoản dự kiến: <b>'+h(j.email||'Chưa chọn được')+'</b></div>'+
+   '<details><summary>Xem prompt cảnh '+scene+'</summary><pre class="flow-prompt">'+h(j.prompt)+'</pre></details>'+
+   '<div class="video-card-actions">'+
+   '<button class="small-btn" type="button" onclick="flowCopyPrompt('+id+')">Sao chép prompt</button>'+
+   '<a class="small-btn" href="https://labs.google/fx/tools/flow" target="_blank" rel="noopener noreferrer">Mở Google Flow</a>'+
+   (j.status==='assigned'?'<button class="small-btn" type="button" onclick="flowJobAction('+id+',\'complete\')">Xác nhận video đã tạo</button>':'')+
+   (j.status!=='completed'&&j.status!=='cancelled'?'<button class="small-btn" type="button" onclick="flowJobAction('+id+',\'retry\')">Phân lại</button>':'')+
+   '</div></article>';
+ }).join('');
+ return pageHead('🎬 GOOGLE FLOW',
+    'Tài khoản <span class="gradient-text">Flow & tín dụng</span>',
+    'Nhập Gmail, xác nhận tín dụng và phân 5 prompt video qua những tài khoản đủ điểm.',
+    eButton('➕ Nhập danh sách Gmail','onclick="flowFocusAdd()"'))+
+ '<div class="note">Google Flow chưa công bố API kiểm tra số dư/tự gửi video được hỗ trợ ở đây. Bạn phải đăng nhập và xem số điểm trên Flow, sau đó nhập vào phần mềm. Phân bổ tài khoản là tự động theo điểm đã nhập; tạo video vẫn cần thao tác trong Flow. Không nhập mật khẩu, cookies hay OTP.</div>'+
+ '<section class="panel padded flow-accounts-panel"><h3>1. Danh sách tài khoản Google Flow</h3>'+
+ '<div class="field"><label for="flowEmailList">Gmail (mỗi dòng một địa chỉ, tối đa 100)</label>'+
+ '<textarea id="flowEmailList" rows="3" placeholder="flow01@gmail.com&#10;flow02@gmail.com"></textarea></div>'+
+ '<div class="video-card-actions"><button class="primary-btn" type="button" onclick="flowAddAccounts()">Thêm Gmail vào database</button>'+
+ '<a class="small-btn" target="_blank" rel="noopener noreferrer" href="https://labs.google/fx/tools/flow">Mở Flow để xem điểm</a></div>'+
+ '<div class="tagline">Trên Flow nhấn ảnh đại diện góc trên phải để xem số điểm còn lại. Hãy nhập số vừa kiểm tra cho từng tài khoản.</div>'+
+ '<div class="flow-account-grid">'+(accountsHtml||empty('✉️','Chưa có Gmail','Thêm email trước khi phân bổ video.'))+'</div></section>'+
+ '<section class="panel padded flow-queue-panel"><h3>2. Phân bổ 5 prompt Veo 3</h3>'+
+ '<div class="video-form-grid"><div class="field"><label for="flowMissionSelect">Bộ prompt đã hoàn thành và kiểm duyệt</label>'+
+ '<select id="flowMissionSelect">'+canQueue.map(x=>'<option value="'+x.mission_id+'">'+
+  h('#'+x.mission_id+' · '+x.product_name)+'</option>').join('')+'</select></div>'+
+ '<div class="field"><label for="flowModelSelect">Chế độ Flow / số điểm mỗi video</label>'+
+ '<select id="flowModelSelect"><option value="veo3.1-lite">Veo 3.1 Lite – 10 điểm*</option>'+
+ '<option value="veo3.1-fast">Veo 3.1 Fast – 20 điểm*</option>'+
+ '<option value="veo3.1-quality">Veo 3.1 Quality – 100 điểm*</option></select></div></div>'+
+ '<div class="video-card-actions"><button type="button" class="primary-btn" onclick="flowQueueMission()">Tạo hàng đợi 5 cảnh</button>'+
+ '<button type="button" class="small-btn" onclick="flowAllocate()">Phân bổ lại tài khoản đủ điểm</button></div>'+
+ '<div class="tagline">*Chi phí tham khảo cho người dùng không thuộc Ultra, mỗi lần tạo một video; Google có thể thay đổi theo gói và lựa chọn trong Flow. Phải xác nhận chi phí hiện tại trên Flow.</div>'+
+ '<div class="flow-job-list">'+(jobsHtml||empty('🎞','Chưa có hàng đợi','Tạo 5 prompt đã kiểm duyệt từ Xưởng SEO & Video AI.'))+'</div></section>'+
+ '<div class="note">Chỉ bấm “Xác nhận video đã tạo” sau khi Flow thực sự hoàn tất. Phần mềm sẽ trừ lượng điểm dự kiến khỏi số dư do bạn đã nhập. Đây là sổ theo dõi thủ công, không phải số dư đồng bộ trực tiếp từ Google. Khi tài khoản hết điểm, các cảnh chưa bắt đầu sẽ được phân lại sang Gmail khác đủ điểm nếu có.</div>';
+}
+function flowFocusAdd(){
+ const input=$('#flowEmailList');
+ if(input){input.focus();input.scrollIntoView({behavior:'smooth',block:'center'})}
+}
+async function flowAddAccounts(){
+ const mails=$('#flowEmailList')?.value||'';
+ try{const r=await api('flow/accounts/add',{emails:mails});toast(r.message);await refresh()}
+ catch(e){toast(e.message,true)}
+}
+async function flowSaveCredit(button){
+ const row=button.closest('[data-email]');
+ if(!row)return;
+ const raw=row.querySelector('.flow-credit-input')?.value;
+ const label=row.querySelector('.flow-profile-input')?.value||'';
+ if(raw===''||raw===undefined||!Number.isInteger(Number(raw))||Number(raw)<0){
+  toast('Hãy nhập số điểm Flow nguyên không âm sau khi kiểm tra trên Google Flow',true);return
+ }
+ try{
+  const r=await api('flow/accounts/balance',{email:row.dataset.email,balance:Number(raw),profile_label:label});
+  toast(r.message);await refresh()
+ }catch(e){toast(e.message,true)}
+}
+async function flowToggleAccount(button,enabled){
+ const row=button.closest('[data-email]');if(!row)return;
+ try{await api('flow/accounts/enabled',{email:row.dataset.email,enabled});await refresh()}
+ catch(e){toast(e.message,true)}
+}
+async function flowQueueMission(){
+ const mission=Number($('#flowMissionSelect')?.value);
+ const model=$('#flowModelSelect')?.value;
+ if(!Number.isInteger(mission)||mission<=0){toast('Chưa có bộ 5 prompt đã được kiểm duyệt',true);return}
+ if(!confirm('Đưa 5 prompt vào hàng đợi phân tài khoản Flow? Thao tác này KHÔNG tự tạo video và không tiêu thụ điểm.'))return;
+ try{
+  const r=await api('flow/jobs/queue',{mission_id:mission,model});toast(r.message);await refresh()
+ }catch(e){toast(e.message,true)}
+}
+async function flowAllocate(){
+ try{
+  const r=await api('flow/jobs/allocate',{});
+  toast('Đã phân bổ '+r.assigned.length+' cảnh sang các Gmail đủ tín dụng đã khai báo');
+  await refresh()
+ }catch(e){toast(e.message,true)}
+}
+function flowCopyPrompt(id){
+ const item=(data.flow_jobs||[]).find(x=>x.id===id);
+ if(item)copyText(item.prompt);
+}
+async function flowJobAction(id,action){
+ const item=(data.flow_jobs||[]).find(x=>x.id===id);
+ if(!item)return;
+ if(action==='complete'&&!confirm(
+   'Bạn đã thực sự tạo xong video trên Google Flow bằng '+item.email+
+   '? Phần mềm sẽ ghi trạng thái hoàn thành và trừ '+item.credit_cost+
+   ' điểm ƯỚC TÍNH khỏi số dư đã nhập.'))return;
+ try{
+  const r=await api('flow/jobs/action',{
+   job_id:id,action,confirm_flow_success:action==='complete',completed_url:''
+  });
+  toast(action==='complete'?'Đã ghi nhận video theo xác nhận của bạn':'Đã đưa prompt về hàng chờ và phân bổ lại');
+  await refresh()
+ }catch(e){toast(e.message,true)}
+}
 function videoRoomView(){
  const results=data.video_productions||[];
  const stages={research_pending:'Chờ nghiên cứu TikTok',research_complete:'Đã nghiên cứu',script_complete:'Đã soạn kịch bản',
@@ -728,7 +853,7 @@ async function controlTelegram(action){
 function domView(){const ss=data.training||[];const isActive=ss.some(s=>['starting','recording','saving'].includes(s.status));return `${pageHead('◉ BROWSER LEARNING','Học thao tác <span class="gradient-text">đăng sản phẩm</span>','Bấm bắt đầu trong phần mềm → làm mẫu trên trình duyệt → bấm dừng để lưu DOM và các bước.',eButton('◉ Bắt đầu học','onclick="showTrainForm()"'))}
  <div class="two-cols"><section class="panel"><div class="panel-head"><h3>Các phiên học thao tác</h3><small>${ss.length} phiên</small></div><div class="table-wrap">${ss.length?`<table class="data-table"><thead><tr><th>Profile</th><th>Nguồn</th><th>Trạng thái</th><th>Số thao tác</th><th>Điều khiển</th></tr></thead><tbody>${ss.map(x=>`<tr><td><strong>${h(x.account_id)}</strong><div class="tagline">${h(x.mode)}</div></td><td>${tag(x.target)}</td><td>${tag(x.status)}<div class="tagline">${h(x.message||'')}</div></td><td>${x.events_count||0}</td><td><div class="inline-actions">${['starting','recording'].includes(x.status)?`<button class="small-btn stop-btn" onclick="stopTraining('${x.id}')">■ Dừng & lưu</button>`:''}<button class="small-btn" onclick="showTrainingDetail('${x.id}')">Xem dữ liệu</button></div></td></tr>`).join('')}</tbody></table>`:empty('⌘','Chưa có phiên học','Nhấn Bắt đầu học để mở trang mẫu và ghi thao tác thủ công.')}</div></section>
  <section class="panel padded"><h3>🖱 Học bằng nút bấm</h3>${[['1','Chọn gian hàng','Chọn profile Chrome và loại công việc tạo mới/cập nhật.'],['2','Bấm Bắt đầu học','Phần mềm mở trình duyệt theo profile bạn đã đăng nhập.'],['3','Bạn thao tác mẫu','Bấm vào form, nhập dữ liệu, chọn ảnh như bình thường.'],['4','Bấm Dừng & lưu','AI lưu thẻ input/textarea/select, label và chuỗi tương tác để bạn kiểm tra.']].map(x=>`<div class="info-row"><span class="ic">${x[0]}</span><div><strong>${x[1]}</strong><p>${x[2]}</p></div></div>`).join('')}<div class="note warning" style="margin-top:15px">Mặc định học trên form demo nội bộ. Chỉ chọn Seller Center khi bạn có quyền sử dụng công cụ ghi thao tác theo điều khoản nền tảng. Không thu dữ liệu đã nhập, mật khẩu, OTP hoặc cookie. Không tự bấm đăng.</div></section></div>`}
-function render(){document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===activeView));$('#breadcrumb').textContent=labels[activeView];const views={hq:home,agents:agentsView,missions:missionsView,forum:forumView,video:videoRoomView,settings:settingsView,shops:shopsView,proxies:proxiesView,products:productsView,jobs:jobsView,memory:memoryView,telegram:telegramView,dom:domView};$('#mainContent').innerHTML=(views[activeView]||home)();if(activeView==='hq'&&sceneMode==='mars'){if($('#marsSvg'))$('#marsSvg').style.transform=`scale(${sceneScale})`;document.querySelectorAll('.room').forEach(el=>{el.addEventListener('click',()=>el.dataset.agent?openAgent(el.dataset.agent):navigate(el.dataset.view));el.addEventListener('keydown',e=>{if(e.key==='Enter')el.click()})})}}
+function render(){document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===activeView));$('#breadcrumb').textContent=labels[activeView];const views={hq:home,agents:agentsView,missions:missionsView,forum:forumView,video:videoRoomView,flow:flowView,settings:settingsView,shops:shopsView,proxies:proxiesView,products:productsView,jobs:jobsView,memory:memoryView,telegram:telegramView,dom:domView};$('#mainContent').innerHTML=(views[activeView]||home)();if(activeView==='hq'&&sceneMode==='mars'){if($('#marsSvg'))$('#marsSvg').style.transform=`scale(${sceneScale})`;document.querySelectorAll('.room').forEach(el=>{el.addEventListener('click',()=>el.dataset.agent?openAgent(el.dataset.agent):navigate(el.dataset.view));el.addEventListener('keydown',e=>{if(e.key==='Enter')el.click()})})}}
 function openAgent(id){const a=data.agents.find(x=>x.id===id);if(!a)return;const ms=data.missions.filter(m=>m.agent_id===id);openModal(`<div class="eyebrow">PHÒNG BAN AI – CHỈ XEM</div><div style="font-size:43px;margin:14px 0">${a.emoji}</div><h2>${a.name}</h2><p class="sub">${a.room} • ${a.role}</p><div class="note">Bạn chỉ giao nhiệm vụ cho AI CEO. ${a.id==='ceo'?'AI CEO tiếp nhận và điều phối toàn bộ công việc.':'Đây là phòng ban nội bộ, nhận việc qua AI CEO khi chức năng điều phối được kích hoạt.'}</div><h3 style="margin-top:24px">Nhiệm vụ liên quan (${ms.length})</h3>${ms.length?ms.slice(0,4).map((m,i)=>miniTaskRow(m,i)).join(''):'<div class="empty-sm">Chưa có nhiệm vụ trong hàng đợi</div>'}<button class="primary-btn" style="margin-top:20px" onclick="closeModal();showMissionForm()">👑 Giao việc cho AI CEO</button>`)}
 function showMissionForm(){
  openModal('<div class="eyebrow">CEO COMMAND CENTER</div><h2>Giao nhiệm vụ cho AI CEO</h2>'+
