@@ -172,7 +172,8 @@ def _launch_for_profile(db_path, info, profiles_dir=None):
     lock = folder / LOCK_NAME
     token = uuid4().hex
     try:
-        fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with _PROFILE_ACTION_LOCK:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError as exc:
         raise ValueError(
             "Profile đang được sử dụng. Hãy quay về Chrome đang mở và không khởi chạy trùng."
@@ -298,7 +299,8 @@ def _reserve_credit_worker(db_path, info, profiles_dir=None):
     lock = folder / LOCK_NAME
     token = uuid4().hex
     try:
-        fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with _PROFILE_ACTION_LOCK:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError as exc:
         raise ValueError(
             "Hãy đóng cửa sổ Chrome của Gmail này trước khi đọc điểm tín dụng."
