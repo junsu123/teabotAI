@@ -231,9 +231,27 @@ def worker(db_path, enrollment_id, token, profiles_dir=None, records_dir=None,
             [exe, "--user-data-dir=" + str(folder), "--new-window",
              "--no-first-run", pair_url, flow_profiles.FLOW_URL],
             cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        # The browser extension closes the window only on successful read.
-        # If not installed, user closes manually and confirms in dashboard.
-        chrome.wait()
+        # On successful capture the extension gracefully closes the Chrome
+        # window. Some Chrome installations retain a background browser
+        # process; finish that process only AFTER the window was closed and
+        # the verified account was durably saved.
+        while True:
+            try:
+                chrome.wait(timeout=1)
+                break
+            except subprocess.TimeoutExpired:
+                state = get_status(enrollment_id, records)["status"]
+                if state in ("completed", "duplicate"):
+                    try:
+                        chrome.wait(timeout=8)
+                    except subprocess.TimeoutExpired:
+                        chrome.terminate()
+                        try:
+                            chrome.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            chrome.kill()
+                            chrome.wait(timeout=5)
+                    break
         state = get_status(enrollment_id, records)["status"]
         if state in ("completed", "duplicate"):
             discard = state == "duplicate"
