@@ -340,3 +340,9 @@ html,body{max-width:100%}
 .flow-accounts-table .flow-email{min-width:175px}
 .flow-accounts-table .flow-mini.blue{cursor:pointer}
 .flow-ui .flow-add-card .flow-green-note.small{line-height:1.5}
+
+
+/* Flow credit read-only DOM check: additional manual edit button. */
+.flow-mini.neutral{background:#485567;color:#eef4fc}
+.flow-ui .flow-row-actions{min-width:205px}
+.flow-ui .flow-credit small{font-size:10px;white-space:nowrap}
