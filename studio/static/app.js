@@ -114,6 +114,18 @@ function organigram(){return `<div style="padding:23px;display:flex;align-items:
 function zoom(by){sceneScale=Math.max(.65,Math.min(1.6,sceneScale+by));if($('#marsSvg'))$('#marsSvg').style.transform=`scale(${sceneScale})`}
 function agentsView(){return `${pageHead('♟ TEAM MANAGEMENT','Nhân viên <span class="gradient-text">AI</span>','Phòng ban chỉ nhận việc qua AI CEO; bạn không giao việc trực tiếp.',eButton('👑 Giao việc cho CEO','onclick="showMissionForm()"'))}<div class="agents-cards">${data.agents.map(a=>`<div class="agent-card" onclick="openAgent('${a.id}')"><div class="portrait" style="background:${a.color}22;border:1px solid ${a.color}66">${a.emoji}</div><h3>${a.name}</h3><p>${a.role}</p><div class="bottom"><span>● Cấu hình sẵn</span><span>Xem nhiệm vụ ↗</span></div></div>`).join('')}</div><div class="note" style="margin-top:20px">Các agent là những vai trò logic trong phần mềm. Để xử lý AI thực sự, bạn phải cài Ollama và cấu hình workflow trong mã nguồn Python; trạng thái này không có nghĩa AI đang chạy nền.</div>`}
 let flowCurrentEnrollment=null;
+let flowEnrollmentStarting=false;
+const flowEnrollmentBusy = () => flowEnrollmentStarting ||
+  ['opening','signin_pending','inspecting','capturing'].includes(flowCurrentEnrollment?.status);
+function flowSyncAddButton(){
+ const button=document.querySelector('#flowAddAccountButton');
+ if(!button)return;
+ const busy=flowEnrollmentBusy();
+ button.disabled=busy;
+ button.classList.toggle('flow-opening',busy);
+ button.setAttribute('aria-busy',String(busy));
+ button.textContent=busy?'＋ Đang mở trình duyệt...':'＋ Thêm tài khoản';
+}
 function flowView(){
  const accounts=data.flow_accounts||[],jobs=data.flow_jobs||[];
  const profiles=data.flow_browser_profiles||{};
@@ -189,7 +201,7 @@ function flowView(){
       <b>Đăng nhập trình duyệt</b>
       <p class="flow-green-note small">Nhấn + Thêm tài khoản để mở Chrome thật. Bạn đăng nhập và đóng Chrome; sau đó phần mềm thử đọc email, tín dụng từ phiên đã lưu. Không cần nhập Gmail trước.</p>
       <div class="flow-card-buttons">
-       <button class="flow-btn blue" type="button" onclick="flowEnrollAccount()">＋ Thêm tài khoản</button>
+       <button id="flowAddAccountButton" class="flow-btn ${flowEnrollmentBusy()?'flow-opening':'blue'}" type="button" onclick="flowEnrollAccount()" ${flowEnrollmentBusy()?'disabled aria-busy="true"':'aria-busy="false"'}>${flowEnrollmentBusy()?'＋ Đang mở trình duyệt...':'＋ Thêm tài khoản'}</button>
        <button class="flow-btn purple" type="button" onclick="flowShowAddForm(true)">＋ Thêm theo danh sách</button>
        <button class="flow-btn outline" type="button" onclick="flowBackupAccounts()">Sao lưu</button>
        <button class="flow-btn outline" type="button" onclick="flowRefreshAll()">Nạp lại</button>
@@ -252,13 +264,24 @@ function flowMaskEmail(email){
  const s=parts[0];return s.length<=3?s[0]+'****@'+parts[1]:s.slice(0,4)+'****@'+parts[1];
 }
 async function flowEnrollAccount(){
+ // Update immediately, before network I/O, to prevent multiple profiles from double-clicks.
+ if(flowEnrollmentBusy())return;
+ flowEnrollmentStarting=true;
+ flowCurrentEnrollment={status:'opening',message:'Đang mở Chrome profile mới...'};
+ flowSyncAddButton();
  try{
   const r=await api('flow/enrollments/start',{});
-  flowCurrentEnrollment={status:'opening',message:r.message};
+  flowCurrentEnrollment={id:r.enrollment_id,status:'opening',message:r.message};
   toast('Đang mở Chrome profile mới để bạn đăng nhập Google Flow');
   await refresh();
   flowWatchEnrollment(r.enrollment_id);
- }catch(e){toast('Không tạo được Chrome profile mới: '+e.message,true)}
+ }catch(e){
+  flowCurrentEnrollment=null;
+  toast('Không tạo được Chrome profile mới: '+e.message,true);
+ }finally{
+  flowEnrollmentStarting=false;
+  flowSyncAddButton();
+ }
 }
 async function flowWatchEnrollment(id){
  try{
@@ -266,7 +289,10 @@ async function flowWatchEnrollment(id){
    await new Promise(resolve=>setTimeout(resolve,2500));
    const state=await api('flow/enrollments/status?id='+encodeURIComponent(id));
    flowCurrentEnrollment=state;
-   if(activeView==='flow')await refresh();
+   if(activeView==='flow'){
+    await refresh();
+    flowSyncAddButton();
+   }
    if(state.status==='completed'){
     toast('Đã nhận tài khoản '+state.email+' · '+state.credits+' tín dụng. Chrome đã đóng.');
     return;
@@ -281,7 +307,12 @@ async function flowWatchEnrollment(id){
    }
   }
   toast('Phiên đăng nhập chưa hoàn tất; hãy kiểm tra Chrome đang mở.',true);
- }catch(e){toast('Không đọc được trạng thái Chrome: '+e.message,true)}
+ }catch(e){
+  toast('Không đọc được trạng thái Chrome: '+e.message,true);
+  // Browser state is uncertain; do not leave the only Add button locked forever.
+  flowCurrentEnrollment={...flowCurrentEnrollment,status:'status_error'};
+  flowSyncAddButton();
+ }
 }
 async function flowConfirmEnrollment(){
  const id=flowCurrentEnrollment?.id;

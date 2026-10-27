@@ -360,3 +360,16 @@ html,body{max-width:100%}
 .flow-enrollment-fallback input{flex:1 1 175px;max-width:300px}
 .flow-enrollment-fallback .flow-btn{flex:0 0 auto}
 @media(max-width:600px){.flow-enrollment-fallback input,.flow-enrollment-fallback .flow-btn{width:100%;max-width:none;flex:1 1 100%}}
+
+
+/* Flow: clearly indicate Chrome is opening / waiting for sign-in. */
+.flow-ui #flowAddAccountButton.flow-opening:disabled{
+ background:#afb6bd;
+ color:#f5f7fa;
+ opacity:1;
+ cursor:progress;
+ border:0;
+}
+.flow-ui #flowAddAccountButton.flow-opening:disabled:hover{
+ filter:none;
+}
