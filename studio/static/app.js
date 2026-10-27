@@ -5,7 +5,7 @@ let data={agents:[],accounts:[],jobs:[],missions:[],learnings:[],products:{},pro
 let forumMissionId=0,forumData=null,forumBusy=false;
 const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',video:'Xưởng SEO & Veo 3',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt Gemini / Groq / AI',dom:'Học đăng bài'};
 async function api(endpoint, body=null){
- const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:endpoint.endsWith('/test-saved-agent')?55000:endpoint.endsWith('/test-chat')?30000:endpoint.endsWith('/test')?20000:12000);
+ const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:endpoint.endsWith('/veo-template/sample')?130000:endpoint.endsWith('/test-saved-agent')?55000:endpoint.endsWith('/test-chat')?30000:endpoint.endsWith('/test')?20000:12000);
  const opts=body===null?{signal:ctrl.signal}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal};
  try{
   const response=await fetch('/api/'+endpoint,opts);
@@ -130,7 +130,17 @@ function videoRoomView(){
  <div class="field"><label for="veoTemplateTextarea">Mẫu Veo 3 · tối đa 16.000 ký tự</label>
  <textarea id="veoTemplateTextarea" rows="8" maxlength="16000" placeholder="Dán prompt; có thể dùng {product_name}, {ingredients}">${h(data.veo_template||'')}</textarea></div>
  <div class="video-card-actions"><button type="button" class="primary-btn" onclick="saveVeoTemplate()">💾 Lưu prompt mẫu</button></div>
- <div class="note">Lưu database cục bộ. Nhiệm vụ tạo mới giữ bản mẫu tại thời điểm giao việc. AI được phép biến tấu, không sao chép máy móc.</div></details></section>
+ <div class="veo-sample-controls"><h4>🎬 Thử tạo kịch bản từ prompt mẫu</h4>
+ <p class="tagline">Dùng prompt đang viết trong ô bên trên (kể cả chưa lưu), nhập sản phẩm để tạo bản nháp 40 giây. Chỉ AI CEO nhận yêu cầu này.</p>
+ <div class="video-form-grid">
+  <div class="field"><label for="veoSampleProduct">Tên sản phẩm</label><input type="text" id="veoSampleProduct" maxlength="180" placeholder="Ví dụ: Trà túi lọc đinh lăng"></div>
+  <div class="field"><label for="veoSampleIngredients">Thành phần</label><textarea id="veoSampleIngredients" maxlength="2500" rows="2" placeholder="Nhập đúng thành phần ghi trên nhãn sản phẩm"></textarea></div>
+ </div>
+ <div class="video-card-actions"><button type="button" id="createVeoSampleButton" class="primary-btn" onclick="generateVeoSampleScript()">✨ Tạo kịch bản mẫu</button>
+ <span class="hint" id="veoSampleStatus" role="status" aria-live="polite"></span></div>
+ <div id="veoSamplePreview" class="veo-sample-preview" hidden></div>
+ </div>
+ <div class="note">Lưu database cục bộ. Bản thử chỉ hiển thị để xem và sao chép, không ghi đè prompt mẫu, không tự tạo MP4 hay đăng TikTok. Lệnh AI có thể tiêu thụ token/quota.</div></details></section>
 
  ${results.length?results.map(v=>{
  const brief=(data.video_briefs||{})[v.mission_id]||{};
@@ -143,6 +153,64 @@ function videoRoomView(){
  <button class="small-btn" onclick="showCEOReport(${v.mission_id})">Báo cáo CEO</button></div>
  </article>`;}).join(''):empty('🎬','Chưa có dự án video','Giao brief sản phẩm cho AI CEO để khởi chạy quy trình.')}
  <div class="note">Các URL TikTok chỉ được lưu làm tham chiếu. Nghiên cứu nội dung cần ghi chú hoặc transcript mà chủ cung cấp; hệ thống không tự truy cập video riêng tư. Giấy công bố chưa được xác nhận pháp lý chỉ là tư liệu tham khảo.</div>`;
+}
+function sampleScriptText(scenes){
+ return scenes.map(x=>
+  'CẢNH '+x.scene+' ('+((x.scene-1)*8)+'–'+(x.scene*8)+' giây)\n'+
+  'Hình ảnh/hành động: '+x.action+'\nLời thoại: '+(x.dialogue||'Không lời thoại')+
+  '\nPROMPT GOOGLE VEO 3:\n'+x.veo_prompt
+ ).join('\n\n--------------------\n\n');
+}
+async function generateVeoSampleScript(){
+ const name=$('#veoSampleProduct')?.value.trim()||'';
+ const ingredients=$('#veoSampleIngredients')?.value.trim()||'';
+ const template=$('#veoTemplateTextarea')?.value||'';
+ const button=$('#createVeoSampleButton'),status=$('#veoSampleStatus');
+ const preview=$('#veoSamplePreview');
+ if(name.length<2||ingredients.length<2){
+  toast('Cần nhập tên sản phẩm và thành phần để tạo kịch bản mẫu',true);
+  return;
+ }
+ if(!confirm('Gửi yêu cầu tạo kịch bản mẫu 40 giây cho AI CEO? Phép thử gọi API mô hình và có thể sử dụng token/quota hoặc phát sinh phí theo cấu hình tài khoản.'))return;
+ if(button){button.disabled=true;button.textContent='Đang tạo qua AI CEO...'}
+ if(status)status.textContent='AI CEO đang soạn 5 cảnh × 8 giây. Không rời trang khi đang tạo bản thử.';
+ if(preview){preview.hidden=true;preview.replaceChildren()}
+ try{
+  const result=await api('content/veo-template/sample',{
+   product_name:name,ingredients,template,confirm_token_use:true
+  });
+  if(!Array.isArray(result.scenes)||result.scenes.length!==5)
+   throw Error('Không nhận được đủ 5 cảnh từ AI CEO');
+  const parts=result.scenes.map(x=>{
+   return '<section class="video-scene-card">'+
+    '<div class="video-work-top"><h4>Cảnh '+Number(x.scene)+'/5 · 8 giây</h4>'+
+    '<button type="button" class="small-btn" data-copy-scene="'+Number(x.scene)+'">Sao chép prompt</button></div>'+
+    '<div class="tagline"><strong>Hình ảnh:</strong> '+h(x.action)+'</div>'+
+    '<div class="tagline"><strong>Thoại:</strong> '+h(x.dialogue||'Không thoại')+'</div>'+
+    '<pre>'+h(x.veo_prompt)+'</pre></section>';
+  }).join('');
+  if(preview){
+   preview.innerHTML='<div class="video-work-top"><h4>🎞️ Kịch bản mẫu · '+h(result.product_name)+' · 40 giây</h4>'+
+    '<button type="button" class="small-btn" id="copyFullVeoSample">Sao chép toàn bộ kịch bản</button></div>'+
+    '<div class="note">Đây là bản nháp để duyệt, chưa qua kiểm duyệt pháp lý và chưa render video.</div>'+
+    parts;
+   preview.hidden=false;
+   preview.querySelector('#copyFullVeoSample').addEventListener('click',
+     ()=>copyText(sampleScriptText(result.scenes)));
+   preview.querySelectorAll('[data-copy-scene]').forEach(btn=>
+     btn.addEventListener('click',()=>{
+       const scene=Number(btn.dataset.copyScene);
+       const selected=result.scenes.find(x=>x.scene===scene);
+       if(selected)copyText(selected.veo_prompt);
+     }));
+  }
+  if(status)status.textContent='✓ Đã tạo bản nháp 5 cảnh, mỗi cảnh 8 giây. Xem kết quả bên dưới.';
+ }catch(err){
+  if(status)status.textContent='✕ '+err.message;
+  toast('Không tạo được kịch bản mẫu: '+err.message,true);
+ }finally{
+  if(button){button.disabled=false;button.textContent='✨ Tạo kịch bản mẫu'}
+ }
 }
 async function saveVeoTemplate(){
  const input=$('#veoTemplateTextarea');if(!input)return;
