@@ -116,6 +116,7 @@ function agentsView(){return `${pageHead('♟ TEAM MANAGEMENT','Nhân viên <spa
 function flowView(){
  const accounts=data.flow_accounts||[],jobs=data.flow_jobs||[];
  const profiles=data.flow_browser_profiles||{};
+ const reload=data.flow_reload_status||{};
  const canQueue=(data.commerce_outputs||[]).filter(x=>x.status==='ready'&&x.veo_prompts);
  const statusMap={queued:'Chưa có tài khoản đủ điểm',assigned:'Đã phân tài khoản – chờ thao tác Flow',completed:'Người dùng xác nhận đã tạo',cancelled:'Đã hủy'};
  const activeCount=accounts.filter(a=>a.enabled).length;
@@ -144,7 +145,7 @@ function flowView(){
       <button class="flow-mini neutral" type="button" aria-label="Nhập điểm thủ công của ${h(a.email)}" title="Nhập điểm thủ công / sửa tên profile" onclick="flowEditCredit(this)">✎</button>
       <button class="flow-mini orange" type="button" title="Mở Kho Proxy (chưa gán trực tiếp vào Gmail Flow)" onclick="navigate('proxies')">Proxy</button>
       <button class="flow-mini blue" type="button" onclick="flowOpenProfile(this)" aria-label="Mở Flow bằng profile của ${h(a.email)}" title="Mở Chrome profile riêng cho Gmail này">◎</button>
-      <button class="flow-mini red" type="button" disabled title="Chưa hỗ trợ xóa tài khoản qua backend" aria-label="Xóa tài khoản chưa được hỗ trợ">▤</button>
+      <button class="flow-mini red" type="button" title="Xóa vĩnh viễn Gmail và dữ liệu Chrome profile sau khi đóng trình duyệt" aria-label="Xóa Gmail và profile Chrome" onclick="flowDeleteProfile(this)">▤</button>
       <details class="flow-row-editor"><summary>Chỉnh tín dụng / nhãn Chrome</summary>
        <div class="flow-row-editor-form"><input class="flow-credit-input" type="number" min="0" max="1000000" step="1" placeholder="Tín dụng đã kiểm tra" aria-label="Tín dụng Flow" value="${a.balance===null?'':a.balance}">
        <input class="flow-profile-input" type="text" maxlength="100" placeholder="Nhãn Chrome profile" aria-label="Nhãn profile" value="${h(a.profile_label||'')}">
@@ -215,7 +216,7 @@ function flowView(){
     <label title="Chưa hỗ trợ thiết lập quyền tạo video riêng"><input type="checkbox" disabled> Video</label>
     <label class="flow-unsupported" title="Chưa có tính năng tự tắt theo hạn mức Flow"><input type="checkbox" role="switch" disabled> Tự động tắt tài khoản bị hết giới hạn</label>
     <span class="flow-toolbar-space"></span>
-    <span class="flow-ready-note">${accounts.length?'Đã có tài khoản. Có thể phân bổ prompt sau khi nhập tín dụng.':'Chưa có tài khoản. Hãy thêm Gmail phía trên.'}</span>
+    <span class="flow-ready-note">${reload.running?('Đang Reload: '+(reload.done||0)+'/'+(reload.total||0)+' profile · '+(reload.updated||0)+' cập nhật'):accounts.length?'Bấm Reload để lần lượt kiểm tra tín dụng từng Gmail.':'Chưa có tài khoản. Hãy thêm Gmail phía trên.'}</span>
     <button class="flow-btn green" type="button" onclick="flowRefreshAll()">Làm mới tất cả</button>
    </div>
    <div class="flow-table-scroll" role="region" aria-label="Danh sách tài khoản Google Flow" tabindex="0">
@@ -224,7 +225,7 @@ function flowView(){
      <tbody>${rows||'<tr><td colspan="10" class="flow-empty">Chưa có Gmail. Chọn “Thêm tài khoản” ở khung phía trên.</td></tr>'}</tbody>
     </table>
    </div>
-   <p class="flow-disclaimer">Nút ↻ từng Gmail đọc số tín dụng hiển thị trong Flow bằng profile đã lưu (hãy đóng cửa sổ Chrome đó trước). Đóng Chrome sau khi đăng nhập cũng tự thử đọc điểm. Cookie do Chrome lưu cục bộ, không xuất ra phần mềm. Đọc từ giao diện có thể thất bại nếu Google thay đổi trang hoặc yêu cầu xác minh.</p>
+   <p class="flow-disclaimer">Nút Reload/Nạp lại sẽ lần lượt mở các profile đang bật ở chế độ đọc và cập nhật điểm tín dụng; không bật hàng loạt cửa sổ giao diện Chrome. Profile đang mở sẽ được bỏ qua để tránh xung đột. Nút ▤ xóa Gmail kèm thư mục Chrome sau khi xác nhận; thao tác không thể hoàn tác. Cookie vẫn chỉ lưu bên trong Chrome profile.</p>
   </div>
  </section>
  <details class="flow-queue-details">
@@ -279,8 +280,46 @@ async function flowTestExistingProxy(){
  try{const r=await api('proxies/test',{id});toast(r.message,!r.reachable)}
  catch(e){toast(e.message,true)}
 }
+let flowReloadPolling=false;
 async function flowRefreshAll(){
- await refresh();toast('Đã tải lại dữ liệu cục bộ. Điểm Google Flow không được kiểm tra tự động.');
+ try{
+  const r=await api('flow/profiles/reload-all',{});
+  toast(r.message|| (r.started?'Đang kiểm tra tín dụng Google Flow':'Không có profile cần kiểm tra'));
+  await refresh();
+  if(r.running&&!flowReloadPolling)flowWatchReload();
+ }catch(e){toast(e.message,true)}
+}
+async function flowWatchReload(){
+ if(flowReloadPolling)return;
+ flowReloadPolling=true;
+ try{
+  // Reload worker runs sequentially in backend. This loop only updates UI.
+  for(let i=0;i<240;i++){
+   await new Promise(resolve=>setTimeout(resolve,2500));
+   const status=await api('flow/profiles/reload-status');
+   if(activeView==='flow')await refresh();
+   if(!status.running){
+    toast(status.message||'Đã hoàn tất làm mới tín dụng',Boolean(status.failed||status.skipped));
+    break;
+   }
+  }
+ }catch(e){toast('Không lấy được tiến độ Reload: '+e.message,true)}
+ finally{flowReloadPolling=false}
+}
+async function flowDeleteProfile(button){
+ const email=button.closest('[data-email]')?.dataset.email;
+ if(!email)return;
+ const record=(data.flow_browser_profiles||{})[email];
+ if(record?.in_use){
+  toast('Hãy đóng cửa sổ Chrome của Gmail này trước khi xóa',true);return;
+ }
+ if(!confirm('XÓA VĨNH VIỄN Gmail '+email+' và toàn bộ dữ liệu Chrome profile?\nCookie/phiên đăng nhập trên profile này sẽ mất. Các video đang chờ sẽ được phân lại. Không thể hoàn tác.'))return;
+ button.disabled=true;
+ try{
+  const result=await api('flow/profiles/delete',{email,confirm_delete:true});
+  toast(result.warning||result.message,Boolean(result.warning));
+  await refresh();
+ }catch(e){toast(e.message,true);button.disabled=false}
 }
 async function flowAddAccounts(){
  const mails=$('#flowEmailList')?.value||'';
