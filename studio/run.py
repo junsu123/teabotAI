@@ -477,6 +477,9 @@ class Handler(BaseHTTPRequestHandler):
     return json_reply(self,{'ok':True,'message':'Đã yêu cầu lưu và dừng phiên học'})
    if path=='/api/flow/enrollments/start':
     return json_reply(self,flow_enrollment.start(DB))
+   if path=='/api/flow/enrollments/confirm':
+    return json_reply(self,flow_enrollment.complete_manually(
+        DB,body.get('id'),body.get('email'),body.get('credits')))
    if path=='/api/flow/accounts/add':
     emails=body.get('emails','')
     result=flow_accounts.add_accounts(DB,emails)
