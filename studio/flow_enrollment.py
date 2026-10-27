@@ -1,9 +1,9 @@
-"""One-click Google Flow enrollment using normal Chrome and Windows UI Automation.
+"""One-click Flow enrollment with live DOM reading and Windows UIA fallback.
 
-Owner signs into an ordinary installed Chrome window. Windows UIA reads only
-the *visible* Flow email and credit labels, then saves their values and
-gracefully closes the owned Chrome window. Browser cookies stay exclusively
-inside the Chrome profile. No extension/Playwright/CDP or auth bypass.
+After the owner's manual login, CDP connects to exactly the Chrome process
+started in this private profile and reads post-JavaScript DOM HTML in memory.
+Only a verified Gmail and displayed credit number are saved; no extension,
+password, cookie export, auth bypass, or raw HTML persistence.
 """
 from __future__ import annotations
 
@@ -83,8 +83,8 @@ def start(db_path, profiles_dir=None, records_dir=None):
         shutil.rmtree(folder, ignore_errors=True)
         raise
     return {"ok": True, "enrollment_id": enrollment_id,
-            "message": "Chrome đang mở. Đăng nhập Flow, rồi mở menu tài khoản "
-                       "để hiện Gmail và tín dụng. Windows sẽ thử đọc và tự đóng profile."}
+            "message": "Chrome đang mở. Đăng nhập Flow và mở menu tài khoản nếu cần. "
+                       "Phần mềm đọc DOM HTML đã render và tín dụng, rồi đóng profile khi xác minh được."}
 
 
 def register_verified(db_path, enrollment_id, email, credits, source="browser_uia"):
@@ -141,6 +141,7 @@ def worker(db_path, enrollment_id, token, profiles_dir=None, records_dir=None,
         exe = flow_profiles.chrome_binary()
         chrome = subprocess.Popen([
             exe, "--user-data-dir=" + str(folder), "--new-window",
+            "--remote-debugging-port=0", "--remote-debugging-address=127.0.0.1",
             "--no-first-run", flow_profiles.FLOW_URL],
             cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         save_status(enrollment_id, "signin_pending",
@@ -150,14 +151,26 @@ def worker(db_path, enrollment_id, token, profiles_dir=None, records_dir=None,
         discovered = None
         monitor_error = None
         try:
-            import flow_uia
-            save_status(enrollment_id, "verifying_uia",
-                        "Đang theo dõi thông tin hiển thị trong Chrome bằng Windows UI Automation.",
+            import flow_dom
+            save_status(enrollment_id, "verifying_dom",
+                        "Đang đọc DOM/HTML sau đăng nhập trên đúng Chrome profile của bạn.",
                         records_dir=records)
-            discovered = flow_uia.wait_for_visible_account(
-                chrome, timeout_seconds=timeout_seconds)
-        except (ImportError, OSError, RuntimeError) as exc:
+            discovered = flow_dom.wait_for_dom_account(
+                chrome, folder, timeout_seconds=timeout_seconds)
+        except (ImportError, OSError, RuntimeError, ValueError) as exc:
             monitor_error = type(exc).__name__
+        if discovered is None and chrome.poll() is None:
+            # Chrome debugger may be disabled by enterprise policy.
+            # Preserve the previous read-only UIA inspection as a fallback.
+            try:
+                import flow_uia
+                save_status(enrollment_id, "verifying_uia",
+                            "Không kết nối được DOM Chrome; đang đọc thông tin qua Windows UIA.",
+                            records_dir=records)
+                discovered = flow_uia.wait_for_visible_account(
+                    chrome, timeout_seconds=timeout_seconds)
+            except (ImportError, OSError, RuntimeError) as exc:
+                monitor_error = type(exc).__name__
 
         if discovered is not None:
             email, credits, window = discovered
@@ -175,7 +188,14 @@ def worker(db_path, enrollment_id, token, profiles_dir=None, records_dir=None,
                             "Gmail này đã tồn tại. Giữ nguyên profile và điểm cũ.",
                             records_dir=records)
             # Request close only after the database confirms save/duplicate.
-            closed = flow_uia.close_owned_window(window, chrome.pid)
+            import flow_uia
+            if window is None:
+                # DOM readers may work even when the Windows accessibility
+                # tree cannot be inspected. Only close a window owned by
+                # this dedicated Chrome process.
+                owned = flow_uia.owned_chrome_windows(chrome.pid)
+                window = owned[0] if owned else None
+            closed = bool(window and flow_uia.close_owned_window(window, chrome.pid))
             if closed:
                 try:
                     chrome.wait(timeout=12)
