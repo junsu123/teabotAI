@@ -207,6 +207,11 @@ def json_reply(handler, obj, status=200):
  b=json.dumps(obj,ensure_ascii=False).encode('utf-8')
  handler.send_response(status);handler.send_header('Content-Type','application/json; charset=utf-8')
  handler.send_header('Cache-Control','no-store');handler.send_header('X-Content-Type-Options','nosniff')
+ origin=handler.headers.get('Origin','')
+ if (urlparse(handler.path).path=='/api/flow/enrollments/capture'
+     and re.fullmatch(r'chrome-extension://[a-p]{32}',origin)):
+  handler.send_header('Access-Control-Allow-Origin',origin)
+  handler.send_header('Vary','Origin')
  handler.send_header('Content-Length',str(len(b)));handler.end_headers();handler.wfile.write(b)
 
 def error_reply(handler, code, msg):json_reply(handler,{'ok':False,'error':str(msg)},code)
@@ -221,6 +226,20 @@ class Handler(BaseHTTPRequestHandler):
   # Reject DNS-rebinding attempts at accessing the machine-local control panel.
   host=self.headers.get('Host','').split(':',1)[0].lower()
   return host in ('127.0.0.1','localhost')
+ def do_OPTIONS(self):
+  origin=self.headers.get('Origin','')
+  if (self.is_local_host()
+      and urlparse(self.path).path=='/api/flow/enrollments/capture'
+      and re.fullmatch(r'chrome-extension://[a-p]{32}',origin)
+      and self.headers.get('Access-Control-Request-Method')=='POST'):
+   self.send_response(204)
+   self.send_header('Access-Control-Allow-Origin',origin)
+   self.send_header('Access-Control-Allow-Methods','POST')
+   self.send_header('Access-Control-Allow-Headers','Content-Type, X-Tea-Flow-Extension')
+   self.send_header('Access-Control-Max-Age','300')
+   self.send_header('Vary','Origin')
+   self.end_headers();return
+  return error_reply(self,403,'Nguồn yêu cầu không hợp lệ')
  def do_GET(self):
   if not self.is_local_host():return error_reply(self,403,'Chỉ cho phép truy cập cục bộ')
   path=urlparse(self.path).path
