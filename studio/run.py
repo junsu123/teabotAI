@@ -480,6 +480,8 @@ class Handler(BaseHTTPRequestHandler):
     return json_reply(self,result)
    if path=='/api/flow/profiles/open':
     return json_reply(self,flow_profiles.launch_for_email(DB,body.get('email')))
+   if path=='/api/flow/profiles/login':
+    return json_reply(self,flow_profiles.launch_login_for_email(DB,body.get('email')))
    if path=='/api/flow/jobs/open-profile':
     return json_reply(self,flow_profiles.launch_for_job(DB,body.get('job_id')))
    if path=='/api/flow/profiles/check-credits':
