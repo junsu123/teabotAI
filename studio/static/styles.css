@@ -353,3 +353,10 @@ html,body{max-width:100%}
  border-radius:6px;background:#172e2e;color:#d8f5eb;font-size:12px}
 .flow-enrollment-status strong{color:#72e0bf}
 .flow-enrollment-status span{max-width:100%;overflow-wrap:anywhere}
+
+
+.flow-enrollment-fallback{width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:8px;border-top:1px solid #2d786c}
+.flow-enrollment-fallback p{flex:1 1 100%;margin:0 0 3px;color:#c7e5df;font-size:12px}
+.flow-enrollment-fallback input{flex:1 1 175px;max-width:300px}
+.flow-enrollment-fallback .flow-btn{flex:0 0 auto}
+@media(max-width:600px){.flow-enrollment-fallback input,.flow-enrollment-fallback .flow-btn{width:100%;max-width:none;flex:1 1 100%}}
