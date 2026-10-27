@@ -186,6 +186,7 @@ def overview():
     'veo_template':commerce_content.template(DB),
     'flow_accounts':flow_accounts.list_accounts(DB),
     'flow_browser_profiles':flow_profiles.list_profiles(DB),
+    'flow_reload_status':flow_profiles.reload_status(),
     'flow_jobs':flow_accounts.list_jobs(DB),
     'learnings':list_learnings(), 'products':list_products(), 'proxies':proxy_store.all_proxies(), 'training':training_summary(),
     'ollama':ollama_health(),
