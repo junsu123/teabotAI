@@ -80,3 +80,13 @@ Liên kết lưu lâu dài: `flow_jobs.email` → `flow_browser_profiles.email` 
 - Đọc thông tin giao diện là phương thức best-effort, không phải API kiểm tra điểm được Google chứng nhận. Giao diện hoặc chính sách Google thay đổi có thể làm mất khả năng kiểm tra.
 - **Cookie:** Chrome đã lưu cookie đăng nhập cục bộ trong thư mục profile. Phần mềm **không xuất, sao chép, in, gửi hay lưu thêm cookie** vào SQLite, JSON hoặc GitHub. Không cung cấp cookie hay OTP cho bất kỳ tiện ích/dịch vụ lạ nào.
 - Đảm bảo đăng nhập đúng Gmail ở từng profile; công cụ đọc chữ hiện chưa xác minh độc lập chủ sở hữu Gmail đang đăng nhập.
+
+## Xóa Chrome profile và Reload tín dụng toàn bộ (27/10/2026)
+
+- Nút **▤ Xóa** trên mỗi dòng Flow yêu cầu xác nhận, sau đó xóa Gmail khỏi danh sách cùng toàn bộ thư mục Chrome riêng và cookie/phiên lưu trong thư mục đó. **Đóng cửa sổ Chrome của profile trước khi xóa**. Không thể hoàn tác.
+- Nếu có cảnh video chưa thực hiện đang gán Gmail này, cảnh đó được trả về hàng chờ và phân bổ lại cho Gmail đủ tín dụng. Video **đã hoàn thành** vẫn giữ email lịch sử để truy vết.
+- Hệ thống di chuyển thư mục Chrome sang vị trí xóa tạm trước khi cập nhật SQLite; nếu cập nhật database lỗi, thư mục được đưa về vị trí cũ. Nếu không thể xóa hết file trên Windows, phần mềm cảnh báo tên thư mục tạm còn lại.
+- Các nút **Nạp lại** và **Làm mới tất cả** giờ khởi động một lượt đọc số dư cho **tất cả Gmail đang bật**. Mỗi profile được mở bằng Chrome ở chế độ đọc (headless) **lần lượt**, dùng đúng dữ liệu đăng nhập cục bộ.
+- Profile nào hiện còn một cửa sổ Chrome đang mở sẽ được **bỏ qua**, tránh hỏng profile hoặc xung đột khóa. Đóng Chrome rồi bấm Reload lại nếu muốn kiểm tra profile đó.
+- Bảng hiển thị tiến độ Reload và thông báo kết quả cập nhật/lỗi/bỏ qua. Nếu đọc được chữ tín dụng, lưu điểm, nguồn `browser_dom` và thời gian kiểm tra; nếu không đọc được thì **không ghi đè số dư cũ**.
+- Đây là cách đọc chữ đang hiển thị, không phải API chính thức của Google Flow. Google có thể thay đổi giao diện hoặc yêu cầu xác minh đăng nhập. Chỉ sử dụng với các tài khoản bạn sở hữu và trong giới hạn quyền được phép.
