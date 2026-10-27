@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -206,46 +207,52 @@ def launch_for_job(db_path, job_id, profiles_dir=None):
     return _launch_for_profile(db_path, profile_for_job(db_path, job_id, profiles_dir), profiles_dir)
 
 
+def chrome_binary():
+    """Use normal installed Google Chrome: manual login, no automation flags."""
+    candidates = []
+    if os.name == "nt":
+        for key in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
+            base = os.environ.get(key)
+            if base:
+                candidates.append(Path(base) / "Google" / "Chrome" /
+                                  "Application" / "chrome.exe")
+    elif sys.platform == "darwin":
+        candidates.append(Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"))
+    for name in ("google-chrome", "google-chrome-stable", "chrome"):
+        found = shutil.which(name)
+        if found:
+            candidates.append(Path(found))
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    raise FileNotFoundError("Không tìm thấy Google Chrome. Hãy cài Chrome trên máy.")
+
+
 def browser_worker(db_path, email, token, profiles_dir=None):
-    """Chrome UI for manual sign-in/use only, same directory every opening."""
+    """Open ordinary Chrome with dedicated user-data-dir; Google login is manual.
+
+    No browser automation, hidden navigation, cookie inspection or token export.
+    The same private directory can be used later by an explicitly approved
+    integration, only after its ordinary Chrome window has closed.
+    """
     info = ensure_profile(db_path, email, profiles_dir)
     folder = info["folder"]
     lock = folder / LOCK_NAME
     if not ID_RE.fullmatch(token) or not lock.is_file() or lock.read_text(encoding="utf-8") != token:
         raise RuntimeError("Phiên Chrome profile không có khóa hợp lệ")
-    context = None
     try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as playwright:
-            context = playwright.chromium.launch_persistent_context(
-                user_data_dir=str(folder), channel="chrome", headless=False,
-                accept_downloads=False, viewport=None,
-            )
-            page = context.pages[0] if context.pages else context.new_page()
-            try:
-                page.goto(FLOW_URL, wait_until="domcontentloaded", timeout=60000)
-            except Exception:
-                # Keep browser open for the operator to handle network/login.
-                pass
-            _write_status(folder, "open", "Chrome profile đã mở để thao tác Flow")
-            while True:
-                try:
-                    alive = [p for p in context.pages if not p.is_closed()]
-                except Exception:
-                    break
-                if not alive:
-                    break
-                time.sleep(1)
+        executable = chrome_binary()
+        chrome = subprocess.Popen(
+            [executable, "--user-data-dir=" + str(folder), "--new-window",
+             "--no-first-run", FLOW_URL],
+            cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _write_status(folder, "open", "Chrome profile đã mở để đăng nhập Google thủ công")
+        chrome.wait()
         _write_status(folder, "closed", "Đã đóng Chrome profile")
     except Exception as exc:
         _write_status(folder, "error", "Không mở được Chrome: " + type(exc).__name__ +
-                      ". Kiểm tra Chrome và Playwright trên máy.")
+                      ". Cần cài Google Chrome trên máy.")
     finally:
-        if context is not None:
-            try:
-                context.close()
-            except Exception:
-                pass
         try:
             if lock.read_text(encoding="utf-8") == token:
                 lock.unlink(missing_ok=True)
