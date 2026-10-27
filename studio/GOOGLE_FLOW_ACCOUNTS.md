@@ -100,3 +100,14 @@ Liên kết lưu lâu dài: `flow_jobs.email` → `flow_browser_profiles.email` 
 - **Giới hạn:** Một số quy trình đăng nhập Google có thể từ chối Chrome được điều khiển bằng Playwright. Nếu gặp tình huống này, dùng nút **◎** để mở Chrome thường, đăng nhập thủ công và đóng lại, sau đó dùng **↻** để kiểm tra tín dụng. Chế độ dự phòng này không tự đóng cửa sổ.
 - Nếu không xác minh được Gmail hoặc không thấy tín dụng, phần mềm **không đóng tự động với lý do thành công** và không ghi dữ liệu không xác minh. Bạn có thể tiếp tục thao tác hoặc đóng cửa sổ thủ công.
 - Việc xác minh dựa trên bố cục hiện tại của Google Flow, **không phải API Google hỗ trợ chính thức**. Cần kiểm tra thực tế trên Windows sau khi cập nhật phần mềm.
+
+## Tạo profile mới mà không nhập Gmail trước (27/10/2026)
+
+- Nút **+ Thêm tài khoản** lập tức tạo một thư mục Chrome profile độc lập có ID ngẫu nhiên và mở trang Google Flow. Bạn **không cần nhập Gmail** vào phần mềm.
+- Bạn đăng nhập Google như bình thường. Sau khi Flow hiển thị trang tài khoản, ứng dụng đọc **chỉ văn bản đang hiển thị** trong `.user-email` và `.credits-count`, theo ảnh DevTools bạn cung cấp. Có thể cần mở menu ảnh đại diện để số điểm và địa chỉ email hiển thị.
+- Khi nhận được **email hợp lệ và số tín dụng**, phần mềm đóng cửa sổ Chrome, lưu phiên của Chrome vào profile đó rồi tạo Gmail mới trong SQLite, liên kết với chính ID profile và số dư đã đọc. Số tín dụng được đánh dấu nguồn `browser_dom`.
+- Nếu Gmail đã tồn tại, phần mềm thông báo trùng tài khoản, **không ghi đè profile hoặc số dư cũ** và xóa profile tạm sau khi Chrome đóng.
+- Nếu bạn đóng cửa sổ trước khi xác minh, phần mềm không tạo tài khoản không rõ Gmail và dọn profile tạm.
+- Cookie, mật khẩu, mã OTP và token đăng nhập **không được xuất, đọc, gửi về API hoặc lưu vào SQLite**. Chrome tự quản lý cookie trong thư mục profile riêng (đã được `.gitignore` loại trừ).
+- Chỉ **Thêm theo danh sách** mới tiếp tục có ô nhập nhiều địa chỉ Gmail. Đây là chế độ khác với nút + Thêm tài khoản.
+- Chức năng đọc nội dung trang không phải API Google chính thức. Nếu Google thay đổi bố cục hoặc từ chối trình duyệt tự động hóa, bảng sẽ hiển thị trạng thái lỗi và không lưu một Gmail chưa xác minh; cần kiểm tra thực tế trên Windows.

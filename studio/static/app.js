@@ -113,6 +113,7 @@ function home(){const s=data.stats,ms=data.missions.slice(0,4);return `
 function organigram(){return `<div style="padding:23px;display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:23px;background:radial-gradient(ellipse at center,#1a4050,#09182e)"><div style="border:1px solid #54c5b5;padding:14px 34px;border-radius:13px;background:#164050">👑 <b>AI CEO</b></div><div style="height:20px;width:1px;background:#5fd6c4"></div><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;width:100%">${data.agents.filter(a=>a.id!=='ceo').map(a=>`<button class="small-btn" style="padding:17px;border-color:${a.color};text-align:center" onclick="openAgent('${a.id}')">${a.emoji}<br><b>${a.name}</b><br><small>${a.role}</small></button>`).join('')}</div></div>`}
 function zoom(by){sceneScale=Math.max(.65,Math.min(1.6,sceneScale+by));if($('#marsSvg'))$('#marsSvg').style.transform=`scale(${sceneScale})`}
 function agentsView(){return `${pageHead('♟ TEAM MANAGEMENT','Nhân viên <span class="gradient-text">AI</span>','Phòng ban chỉ nhận việc qua AI CEO; bạn không giao việc trực tiếp.',eButton('👑 Giao việc cho CEO','onclick="showMissionForm()"'))}<div class="agents-cards">${data.agents.map(a=>`<div class="agent-card" onclick="openAgent('${a.id}')"><div class="portrait" style="background:${a.color}22;border:1px solid ${a.color}66">${a.emoji}</div><h3>${a.name}</h3><p>${a.role}</p><div class="bottom"><span>● Cấu hình sẵn</span><span>Xem nhiệm vụ ↗</span></div></div>`).join('')}</div><div class="note" style="margin-top:20px">Các agent là những vai trò logic trong phần mềm. Để xử lý AI thực sự, bạn phải cài Ollama và cấu hình workflow trong mã nguồn Python; trạng thái này không có nghĩa AI đang chạy nền.</div>`}
+let flowCurrentEnrollment=null;
 function flowView(){
  const accounts=data.flow_accounts||[],jobs=data.flow_jobs||[];
  const profiles=data.flow_browser_profiles||{};
@@ -173,7 +174,8 @@ function flowView(){
  <section class="flow-surface">
   <header class="flow-section-header">↧ &nbsp; Thêm tài khoản mới</header>
   <div class="flow-pad">
-   <p class="flow-green-note">Thêm tài khoản Flow để bắt đầu. Gmail Free / Pro / Ultra có giới hạn khác nhau. Bạn có thể quản lý nhiều Gmail trong cùng một danh sách.</p>
+   <p class="flow-green-note">Nhấn + Thêm tài khoản để mở Chrome profile mới, không cần nhập Gmail. Sau khi bạn đăng nhập, phần mềm sẽ nhận dạng Gmail và đọc điểm tín dụng trên Flow.</p>
+   ${flowCurrentEnrollment?`<div class="flow-enrollment-status" role="status"><strong>Chrome profile mới: ${h(flowCurrentEnrollment.status||'opening')}</strong><span>${h(flowCurrentEnrollment.message||'Đang mở Chrome...')}</span>${flowCurrentEnrollment.email?`<span>Gmail: ${h(flowCurrentEnrollment.email)} · Tín dụng: ${h(String(flowCurrentEnrollment.credits??'—'))}</span>`:''}</div>`:''}
    <div class="flow-proxy-bar">
     <label for="flowProxySelect">Proxy cho tài khoản (tùy chọn):</label>
     <select id="flowProxySelect" ${proxies.length?'':'disabled'}><option value="">Chọn proxy có sẵn</option>${proxyOptions}</select>
@@ -183,9 +185,9 @@ function flowView(){
    <div class="flow-add-cards">
     <div class="flow-add-card">
       <b>Đăng nhập trình duyệt</b>
-      <p class="flow-green-note small">Mỗi Gmail có một profile riêng. Thêm một Gmail sẽ mở Chrome cho bạn đăng nhập; nếu xác minh đúng Gmail và số tín dụng, Chrome sẽ tự đóng. Cookie chỉ lưu trong Chrome.</p>
+      <p class="flow-green-note small">Nhấn + Thêm tài khoản để mở ngay Chrome profile trống. Đăng nhập Google Flow; phần mềm tự đọc Gmail và tín dụng rồi đóng profile khi hoàn tất.</p>
       <div class="flow-card-buttons">
-       <button class="flow-btn blue" type="button" onclick="flowShowAddForm(false)">＋ Thêm tài khoản</button>
+       <button class="flow-btn blue" type="button" onclick="flowEnrollAccount()">＋ Thêm tài khoản</button>
        <button class="flow-btn purple" type="button" onclick="flowShowAddForm(true)">＋ Thêm theo danh sách</button>
        <button class="flow-btn outline" type="button" onclick="flowBackupAccounts()">Sao lưu</button>
        <button class="flow-btn outline" type="button" onclick="flowRefreshAll()">Nạp lại</button>
@@ -206,7 +208,7 @@ function flowView(){
   </div>
  </section>
  <section class="flow-surface">
-  <header class="flow-section-header flow-header-between"><span>⚙ &nbsp; Tài khoản Flow</span><strong>Đang bật: ${activeCount} tài khoản | Tổng tín dụng đã nhập: ${totalCredit.toLocaleString('vi-VN')}</strong></header>
+  <header class="flow-section-header flow-header-between"><span>⚙ &nbsp; Tài khoản Flow</span><strong>Đang bật: ${activeCount} tài khoản | Tổng tín dụng: ${totalCredit.toLocaleString('vi-VN')}</strong></header>
   <div class="flow-pad">
    <div class="flow-toolbar">
     <strong>Bật tất cả:</strong>
@@ -246,6 +248,34 @@ function flowMaskEmail(email){
  const parts=String(email||'').split('@');
  if(parts.length!==2)return String(email||'');
  const s=parts[0];return s.length<=3?s[0]+'****@'+parts[1]:s.slice(0,4)+'****@'+parts[1];
+}
+async function flowEnrollAccount(){
+ try{
+  const r=await api('flow/enrollments/start',{});
+  flowCurrentEnrollment={status:'opening',message:r.message};
+  toast('Đang mở Chrome profile mới để bạn đăng nhập Google Flow');
+  await refresh();
+  flowWatchEnrollment(r.enrollment_id);
+ }catch(e){toast('Không tạo được Chrome profile mới: '+e.message,true)}
+}
+async function flowWatchEnrollment(id){
+ try{
+  for(let i=0;i<360;i++){
+   await new Promise(resolve=>setTimeout(resolve,2500));
+   const state=await api('flow/enrollments/status?id='+encodeURIComponent(id));
+   flowCurrentEnrollment=state;
+   if(activeView==='flow')await refresh();
+   if(state.status==='completed'){
+    toast('Đã nhận tài khoản '+state.email+' · '+state.credits+' tín dụng. Chrome đã đóng.');
+    return;
+   }
+   if(['duplicate','cancelled','failed'].includes(state.status)){
+    toast(state.message||'Chưa thêm được tài khoản',true);
+    return;
+   }
+  }
+  toast('Phiên đăng nhập chưa hoàn tất; hãy kiểm tra Chrome đang mở.',true);
+ }catch(e){toast('Không đọc được trạng thái Chrome: '+e.message,true)}
 }
 function flowShowAddForm(bulk){
  const area=$('#flowAddForm'),field=$('#flowEmailList'),label=$('#flowAddLabel');

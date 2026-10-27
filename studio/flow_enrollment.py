@@ -1,0 +1,235 @@
+"""Blank Chrome Flow profile enrollment with identity sourced from visible page.
+
+Cookie/session data belongs solely to the persistent Chrome profile directory.
+No cookie, token, credential, or network response is exported or inspected.
+"""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import time
+from urllib.parse import urlparse
+from uuid import uuid4
+
+import flow_accounts
+import flow_profiles
+
+ROOT = Path(__file__).resolve().parent
+PROFILES = flow_profiles.PROFILES
+RECORDS = ROOT / "data" / "flow_enrollments"
+TERMINAL = {"completed", "duplicate", "cancelled", "failed"}
+MAX_SECONDS = 900
+
+
+def status_path(enrollment_id, records_dir=None):
+    if not isinstance(enrollment_id, str) or not flow_profiles.ID_RE.fullmatch(enrollment_id):
+        raise ValueError("Mã phiên thêm tài khoản không hợp lệ")
+    return (Path(records_dir) if records_dir is not None else RECORDS) / (enrollment_id + ".json")
+
+
+def save_status(enrollment_id, status, message, *, email=None, credits=None, records_dir=None):
+    dest = status_path(enrollment_id, records_dir)
+    flow_profiles.private_dir(dest.parent)
+    doc = {"id": enrollment_id, "status": status, "message": str(message)[:200],
+           "email": email if status == "completed" else None,
+           "credits": credits if status == "completed" else None,
+           "updated_at": flow_profiles.now()}
+    temp = dest.with_suffix(".tmp")
+    temp.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    if os.name != "nt":
+        temp.chmod(0o600)
+    temp.replace(dest)
+    return doc
+
+
+def get_status(enrollment_id, records_dir=None):
+    dest = status_path(enrollment_id, records_dir)
+    if not dest.is_file():
+        raise ValueError("Không tìm thấy phiên thêm tài khoản")
+    obj = json.loads(dest.read_text(encoding="utf-8"))
+    return {k: obj.get(k) for k in ("id", "status", "message", "email", "credits", "updated_at")}
+
+
+def start(db_path, profiles_dir=None, records_dir=None):
+    """Create and launch brand-new Chrome data directory before Gmail is known."""
+    root = Path(profiles_dir) if profiles_dir is not None else PROFILES
+    records = Path(records_dir) if records_dir is not None else RECORDS
+    flow_profiles.private_dir(root)
+    flow_profiles.private_dir(records)
+    enrollment_id = uuid4().hex
+    folder = root / enrollment_id
+    flow_profiles.private_dir(folder)
+    token = uuid4().hex
+    lock = folder / flow_profiles.LOCK_NAME
+    lock.write_text(token, encoding="utf-8")
+    if os.name != "nt":
+        lock.chmod(0o600)
+    save_status(enrollment_id, "opening", "Đang mở Chrome profile mới để đăng nhập Google.",
+                records_dir=records)
+    try:
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+        subprocess.Popen([
+            sys.executable, str(Path(__file__).resolve()), "worker",
+            str(Path(db_path).resolve()), enrollment_id, token,
+            str(root.resolve()), str(records.resolve())],
+            cwd=str(ROOT), creationflags=flags, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, close_fds=True)
+    except Exception:
+        save_status(enrollment_id, "failed", "Không khởi chạy được Chrome profile.",
+                    records_dir=records)
+        shutil.rmtree(folder, ignore_errors=True)
+        raise
+    return {"ok": True, "enrollment_id": enrollment_id,
+            "message": "Đã mở Chrome profile mới. Đăng nhập Google; Gmail sẽ được đọc từ trang Flow."}
+
+
+def detect_visible_account(page):
+    """Read displayed Gmail and credit text only from a labs.google Flow tab."""
+    try:
+        if page.is_closed() or urlparse(page.url).hostname != "labs.google":
+            return None
+        email_node = page.locator("flow-account-panel .user-email, .user-email").first
+        if not email_node.is_visible():
+            for selector in (
+                "button[aria-label*='account' i]",
+                "button[aria-label*='profile' i]",
+                "button[aria-label*='tài khoản' i]",
+                "button:has(img[alt*='avatar' i])",
+            ):
+                try:
+                    btn = page.locator(selector).first
+                    if btn.is_visible():
+                        btn.click(timeout=1000)
+                        break
+                except Exception:
+                    continue
+        if not email_node.is_visible():
+            return None
+        email = flow_accounts.normalize_email(email_node.inner_text(timeout=1300))
+        credits = flow_profiles.credit_from_dom(page)
+        return email, credits
+    except Exception:
+        return None
+
+
+def inspect_context(context):
+    for page in context.pages:
+        item = detect_visible_account(page)
+        if item:
+            return item
+    return None
+
+
+def register_verified(db_path, enrollment_id, email, credits):
+    """Atomically create Gmail/account/profile mapping only AFTER verified sign-in."""
+    email = flow_accounts.normalize_email(email)
+    if isinstance(credits, bool) or not isinstance(credits, int) or not 0 <= credits <= 1000000:
+        raise ValueError("Điểm tín dụng Google Flow không hợp lệ")
+    when = flow_accounts.utcnow()
+    with flow_accounts.connect(db_path) as c:
+        if c.execute("SELECT 1 FROM flow_accounts WHERE email=?", (email,)).fetchone():
+            raise ValueError("DUPLICATE_EMAIL")
+        c.execute("""INSERT INTO flow_accounts
+            (email,balance,balance_checked_at,balance_source,created_at,updated_at)
+            VALUES(?,?,?,'browser_dom',?,?)""", (email, credits, when, when, when))
+        c.execute("""INSERT INTO flow_browser_profiles
+            (email,profile_id,created_at,last_opened_at) VALUES(?,?,?,?)""",
+            (email, enrollment_id, when, when))
+    return email
+
+
+def worker(db_path, enrollment_id, token, profiles_dir=None, records_dir=None,
+           timeout_seconds=MAX_SECONDS, check_interval=2):
+    """Observe manual sign-in, save discovered Gmail + credit, then close browser."""
+    root = Path(profiles_dir) if profiles_dir is not None else PROFILES
+    records = Path(records_dir) if records_dir is not None else RECORDS
+    folder = root / enrollment_id
+    lock = folder / flow_profiles.LOCK_NAME
+    if (not flow_profiles.ID_RE.fullmatch(token) or not lock.is_file()
+            or lock.read_text(encoding="utf-8") != token):
+        raise RuntimeError("Khóa Chrome profile không hợp lệ")
+    completed = False
+    try:
+        from playwright.sync_api import sync_playwright
+        save_status(enrollment_id, "signin_pending",
+                    "Hãy đăng nhập Google Flow trong cửa sổ Chrome.", records_dir=records)
+        with sync_playwright() as pw:
+            context = pw.chromium.launch_persistent_context(
+                user_data_dir=str(folder), channel="chrome", headless=False,
+                accept_downloads=False, viewport={"width": 1400, "height": 900})
+            observed = None
+            try:
+                page = context.pages[0] if context.pages else context.new_page()
+                try:
+                    page.goto(flow_profiles.FLOW_URL, wait_until="domcontentloaded", timeout=60000)
+                except Exception:
+                    pass
+                deadline = time.monotonic() + timeout_seconds
+                while time.monotonic() < deadline:
+                    alive = [p for p in context.pages if not p.is_closed()]
+                    if not alive:
+                        break
+                    observed = inspect_context(context)
+                    if observed:
+                        save_status(enrollment_id, "capturing", "Đã nhận dạng Gmail và tín dụng; đang đóng Chrome để lưu phiên.",
+                                    records_dir=records)
+                        break
+                    try:
+                        alive[0].wait_for_timeout(int(check_interval * 1000))
+                    except Exception:
+                        break
+                if observed is None and any(not p.is_closed() for p in context.pages):
+                    save_status(enrollment_id, "signin_timeout",
+                                "Chưa đọc được Gmail và tín dụng. Hãy đóng Chrome thủ công.",
+                                records_dir=records)
+                    while True:
+                        alive = [p for p in context.pages if not p.is_closed()]
+                        if not alive:
+                            break
+                        try:
+                            alive[0].wait_for_timeout(1200)
+                        except Exception:
+                            break
+            finally:
+                context.close()
+        if observed:
+            email, credits = observed
+            try:
+                register_verified(db_path, enrollment_id, email, credits)
+                completed = True
+                save_status(enrollment_id, "completed",
+                            "Đã lấy Gmail và tín dụng. Chrome profile đã đóng.",
+                            email=email, credits=credits, records_dir=records)
+            except ValueError as exc:
+                if str(exc) != "DUPLICATE_EMAIL":
+                    raise
+                save_status(enrollment_id, "duplicate",
+                            "Gmail này đã tồn tại. Profile cũ được giữ nguyên.",
+                            records_dir=records)
+        else:
+            save_status(enrollment_id, "cancelled",
+                        "Đã đóng Chrome trước khi xác minh tài khoản.",
+                        records_dir=records)
+    except Exception as exc:
+        save_status(enrollment_id, "failed",
+                    "Thêm tài khoản thất bại (" + type(exc).__name__ + "). Hãy thử lại.",
+                    records_dir=records)
+    finally:
+        try:
+            if lock.read_text(encoding="utf-8") == token:
+                lock.unlink(missing_ok=True)
+        except OSError:
+            pass
+        if not completed:
+            shutil.rmtree(folder, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 7 or sys.argv[1] != "worker":
+        raise SystemExit("Only the local Flow dashboard may start enrollment")
+    worker(Path(sys.argv[2]), sys.argv[3], sys.argv[4],
+           Path(sys.argv[5]), Path(sys.argv[6]))
