@@ -128,19 +128,20 @@ function flowView(){
   const stateClass=!a.enabled?'off':!a.fresh?'stale':'on';
   const masked=flowMaskEmail(a.email);
   const profile=profiles[a.email]||null;
-  const profileState=profile?.in_use?'Đang mở':profile?.status==='error'?'Lỗi mở Chrome':profile?'Đã tạo profile':'Chưa tạo profile';
+  const profileState=profile?.status==='checking_credits'?'Đang đọc tín dụng':profile?.status==='credits_unavailable'?'Đọc điểm chưa thành công':profile?.status==='credits_updated'?'Đã lấy điểm từ Flow':profile?.in_use?'Đang mở Chrome':profile?.status==='error'?'Lỗi mở Chrome':profile?'Đã tạo profile':'Chưa tạo profile';
   return `<tr data-email="${h(a.email)}">
     <td class="flow-index">${i+1}</td>
     <td><button class="flow-switch ${a.enabled?'is-on':''}" type="button" role="switch" aria-checked="${Boolean(a.enabled)}" aria-label="${a.enabled?'Tạm tắt':'Bật lại'} ${h(a.email)}" onclick="flowToggleAccount(this,${!a.enabled})"><span></span></button></td>
     <td><input aria-label="Tạo ảnh (chưa hỗ trợ thiết lập riêng)" title="Chưa có thiết lập quyền tạo ảnh riêng theo tài khoản" type="checkbox" disabled></td>
     <td><input aria-label="Tạo video (chưa hỗ trợ thiết lập riêng)" title="Chưa có thiết lập quyền tạo video riêng theo tài khoản" type="checkbox" disabled></td>
-    <td class="flow-email" title="${h(a.email)}">${h(masked)}<small class="flow-profile-sub">${h(profileState)}${profile?' · '+h(profile.profile_id.slice(0,8)):''}</small></td>
+    <td class="flow-email" title="${h(a.email)}">${h(masked)}<small class="flow-profile-sub" title="${h(profile?.message||'')}">${h(profileState)}${profile?' · '+h(profile.profile_id.slice(0,8)):''}</small></td>
     <td class="flow-plan" title="Chưa đồng bộ loại gói với Google Flow">—</td>
-    <td class="flow-credit" title="Số dư bạn nhập thủ công; đã dành ${Number(a.reserved)||0} điểm"><strong>${h(balance)}</strong><small>Đã dành: ${Number(a.reserved)||0}</small></td>
+    <td class="flow-credit" title="${h(a.balance_source==='browser_dom'?'Tín dụng đọc từ giao diện Flow':'Tín dụng nhập thủ công')} · Đã dành ${Number(a.reserved)||0} điểm"><strong>${h(balance)}</strong><small>${a.balance_source==='browser_dom'?'Đọc từ Flow':'Nhập thủ công'} · Đã dành: ${Number(a.reserved)||0}</small></td>
     <td class="flow-proxy">—</td>
     <td><span class="flow-state ${stateClass}">${state}</span></td>
     <td class="flow-row-actions">
-      <button class="flow-mini green" type="button" aria-label="Cập nhật tín dụng của ${h(a.email)}" title="Nhập tín dụng mới / tên profile" onclick="flowEditCredit(this)">↻</button>
+      <button class="flow-mini green" type="button" aria-label="Đọc tín dụng Google Flow của ${h(a.email)}" title="Đọc điểm từ Flow. Đóng Chrome profile này trước khi kiểm tra." onclick="flowCheckCredits(this)">↻</button>
+      <button class="flow-mini neutral" type="button" aria-label="Nhập điểm thủ công của ${h(a.email)}" title="Nhập điểm thủ công / sửa tên profile" onclick="flowEditCredit(this)">✎</button>
       <button class="flow-mini orange" type="button" title="Mở Kho Proxy (chưa gán trực tiếp vào Gmail Flow)" onclick="navigate('proxies')">Proxy</button>
       <button class="flow-mini blue" type="button" onclick="flowOpenProfile(this)" aria-label="Mở Flow bằng profile của ${h(a.email)}" title="Mở Chrome profile riêng cho Gmail này">◎</button>
       <button class="flow-mini red" type="button" disabled title="Chưa hỗ trợ xóa tài khoản qua backend" aria-label="Xóa tài khoản chưa được hỗ trợ">▤</button>
@@ -223,7 +224,7 @@ function flowView(){
      <tbody>${rows||'<tr><td colspan="10" class="flow-empty">Chưa có Gmail. Chọn “Thêm tài khoản” ở khung phía trên.</td></tr>'}</tbody>
     </table>
    </div>
-   <p class="flow-disclaimer">Profile Chrome riêng được lưu trên máy; không chia sẻ cookie giữa Gmail. Tín dụng vẫn nhập thủ công. Loại gói, quyền ảnh/video và proxy Flow chưa đồng bộ. Hãy sử dụng tài khoản được phép theo điều khoản của Google.</p>
+   <p class="flow-disclaimer">Nút ↻ từng Gmail đọc số tín dụng hiển thị trong Flow bằng profile đã lưu (hãy đóng cửa sổ Chrome đó trước). Đóng Chrome sau khi đăng nhập cũng tự thử đọc điểm. Cookie do Chrome lưu cục bộ, không xuất ra phần mềm. Đọc từ giao diện có thể thất bại nếu Google thay đổi trang hoặc yêu cầu xác minh.</p>
   </div>
  </section>
  <details class="flow-queue-details">
@@ -290,6 +291,34 @@ async function flowAddAccounts(){
   if(result.emails?.length===1)await flowOpenProfileEmail(result.emails[0]);
   else toast('Đã tạo '+(result.profiles_ready||0)+' profile. Chọn nút ◎ của mỗi Gmail để đăng nhập.');
  }catch(e){toast(e.message,true)}
+}
+async function flowCheckCredits(button){
+ const email=button.closest('[data-email]')?.dataset.email;
+ if(!email){toast('Không tìm thấy Gmail cần kiểm tra',true);return}
+ try{
+  button.disabled=true;
+  const r=await api('flow/profiles/check-credits',{email});
+  toast(r.message);
+  await refresh();
+  flowWatchCredits(email);
+ }catch(e){toast(e.message,true)}
+ finally{if(button.isConnected)button.disabled=false}
+}
+async function flowWatchCredits(email){
+ for(let i=0;i<24;i++){
+  await new Promise(resolve=>setTimeout(resolve,2500));
+  await refresh();
+  if(activeView!=='flow')return;
+  const profile=data.flow_browser_profiles?.[email];
+  if(profile?.status==='credits_updated'){
+   const account=(data.flow_accounts||[]).find(a=>a.email===email);
+   toast('Đã đọc tín dụng từ Flow: '+(account?.balance??'?')+' điểm');return;
+  }
+  if(profile?.status==='credits_unavailable'){
+   toast(profile.message||'Không đọc được tín dụng. Vui lòng kiểm tra đăng nhập.',true);return;
+  }
+ }
+ toast('Đang chờ Flow phản hồi. Bạn có thể nhấn Làm mới tất cả để xem kết quả.',true);
 }
 async function flowOpenProfileEmail(email){
  if(!email){toast('Chưa chọn Gmail Flow',true);return}
