@@ -65,9 +65,9 @@ class FlowLoginTests(unittest.TestCase):
         p.evaluate.assert_not_called()
 
     def test_wrong_account_does_not_record_credits(self):
-        with mock.patch.object(flow_login, "check_visible_pages",
-                               return_value=("wrong_email", None)), \\
-             mock.patch.object(flow_login.time, "sleep"):
+        with (mock.patch.object(flow_login, "check_visible_pages",
+                                return_value=("wrong_email", None)),
+              mock.patch.object(flow_login.time, "sleep")):
             clock = iter([0, 0, 2])
             with mock.patch.object(flow_login.time, "monotonic", side_effect=lambda: next(clock)):
                 context = mock.Mock()
