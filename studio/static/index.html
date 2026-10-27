@@ -7,7 +7,7 @@
 </head>
 <body>
 <div class="app">
-  <aside class="sidebar">
+  <aside class="sidebar" id="appSidebar" aria-label="Menu điều hướng">
     <div class="brand"><div class="brand-icon">✦</div><div><b>TEA AI</b><span>MARS STUDIO <em>LOCAL</em></span></div></div>
     <div class="space-stamp"><span class="small-star">✺</span><div>TRỤ SỞ CỦA BẠN <strong>TRÊN SAO HỎA</strong></div></div>
     <div class="menu-label">TRUNG TÂM ĐIỀU HÀNH</div>
@@ -35,8 +35,10 @@
       <small>Chạy trên máy tính của bạn</small><strong><span class="led"></span> Local workstation</strong>
     </div>
   </aside>
+  <button type="button" class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Đóng menu điều hướng" hidden></button>
   <section class="workspace">
     <header class="topbar">
+      <button type="button" class="mobile-menu-toggle" id="mobileMenuButton" aria-controls="appSidebar" aria-expanded="false" aria-label="Mở menu điều hướng">☰</button>
       <div class="breadcrumb"><span>◈</span><b id="breadcrumb">Trụ sở AI</b><small>/ TEA AI Company</small></div>
       <div class="top-actions"><span class="top-pill"><span class="led"></span> LOCAL MODE</span><span class="clock" id="clock"></span><button class="outline-btn" id="refreshBtn">↻ Làm mới</button><div class="user-circle">CHỦ</div></div>
     </header>
