@@ -174,8 +174,10 @@ function flowView(){
  <section class="flow-surface">
   <header class="flow-section-header">↧ &nbsp; Thêm tài khoản mới</header>
   <div class="flow-pad">
-   <p class="flow-green-note">Nhấn + Thêm tài khoản để mở Chrome profile mới, không cần nhập Gmail. Sau khi bạn đăng nhập, phần mềm sẽ nhận dạng Gmail và đọc điểm tín dụng trên Flow.</p>
-   ${flowCurrentEnrollment?`<div class="flow-enrollment-status" role="status"><strong>Chrome profile mới: ${h(flowCurrentEnrollment.status||'opening')}</strong><span>${h(flowCurrentEnrollment.message||'Đang mở Chrome...')}</span>${flowCurrentEnrollment.email?`<span>Gmail: ${h(flowCurrentEnrollment.email)} · Tín dụng: ${h(String(flowCurrentEnrollment.credits??'—'))}</span>`:''}</div>`:''}
+   <p class="flow-green-note">Nhấn + Thêm tài khoản để mở Google Chrome thông thường. Đăng nhập Google Flow, sau đó đóng cửa sổ Chrome để phần mềm thử đọc Gmail và tín dụng. Không sử dụng Chrome tự động hóa trong bước đăng nhập.</p>
+   ${flowCurrentEnrollment?`<div class="flow-enrollment-status" role="status"><strong>Chrome profile mới: ${h(flowCurrentEnrollment.status||'opening')}</strong><span>${h(flowCurrentEnrollment.message||'Đang mở Chrome...')}</span>${flowCurrentEnrollment.email?`<span>Gmail: ${h(flowCurrentEnrollment.email)} · Tín dụng: ${h(String(flowCurrentEnrollment.credits??'—'))}</span>`:''}
+     ${flowCurrentEnrollment.status==='needs_manual'?`<div class="flow-enrollment-fallback"><p>Chrome đã lưu phiên, nhưng không đọc được thông tin tự động. Chỉ trong trường hợp này, nhập Gmail và điểm bạn nhìn thấy trong Google Flow để gắn vào profile đã đăng nhập.</p><input id="flowEnrollEmail" type="email" placeholder="Gmail đã đăng nhập" autocomplete="off"><input id="flowEnrollCredits" type="number" placeholder="Tín dụng Flow" min="0" step="1"><button class="flow-btn blue" type="button" onclick="flowConfirmEnrollment()">Lưu profile đã đăng nhập</button></div>`:''}
+     </div>`:''}
    <div class="flow-proxy-bar">
     <label for="flowProxySelect">Proxy cho tài khoản (tùy chọn):</label>
     <select id="flowProxySelect" ${proxies.length?'':'disabled'}><option value="">Chọn proxy có sẵn</option>${proxyOptions}</select>
@@ -185,7 +187,7 @@ function flowView(){
    <div class="flow-add-cards">
     <div class="flow-add-card">
       <b>Đăng nhập trình duyệt</b>
-      <p class="flow-green-note small">Nhấn + Thêm tài khoản để mở ngay Chrome profile trống. Đăng nhập Google Flow; phần mềm tự đọc Gmail và tín dụng rồi đóng profile khi hoàn tất.</p>
+      <p class="flow-green-note small">Nhấn + Thêm tài khoản để mở Chrome thật. Bạn đăng nhập và đóng Chrome; sau đó phần mềm thử đọc email, tín dụng từ phiên đã lưu. Không cần nhập Gmail trước.</p>
       <div class="flow-card-buttons">
        <button class="flow-btn blue" type="button" onclick="flowEnrollAccount()">＋ Thêm tài khoản</button>
        <button class="flow-btn purple" type="button" onclick="flowShowAddForm(true)">＋ Thêm theo danh sách</button>
@@ -269,6 +271,10 @@ async function flowWatchEnrollment(id){
     toast('Đã nhận tài khoản '+state.email+' · '+state.credits+' tín dụng. Chrome đã đóng.');
     return;
    }
+   if(state.status==='needs_manual'){
+    toast(state.message||'Cần xác nhận Gmail và tín dụng để lưu profile',true);
+    return;
+   }
    if(['duplicate','cancelled','failed'].includes(state.status)){
     toast(state.message||'Chưa thêm được tài khoản',true);
     return;
@@ -276,6 +282,20 @@ async function flowWatchEnrollment(id){
   }
   toast('Phiên đăng nhập chưa hoàn tất; hãy kiểm tra Chrome đang mở.',true);
  }catch(e){toast('Không đọc được trạng thái Chrome: '+e.message,true)}
+}
+async function flowConfirmEnrollment(){
+ const id=flowCurrentEnrollment?.id;
+ const email=$('#flowEnrollEmail')?.value?.trim();
+ const value=$('#flowEnrollCredits')?.value?.trim();
+ if(!id||!email||value===undefined||value===''||!Number.isInteger(Number(value))||Number(value)<0){
+  toast('Hãy nhập Gmail và số tín dụng nguyên không âm đang thấy trên Flow',true);return;
+ }
+ try{
+  const result=await api('flow/enrollments/confirm',{id,email,credits:Number(value)});
+  flowCurrentEnrollment=result;
+  toast('Đã gắn tài khoản '+result.email+' vào Chrome profile đã đăng nhập.');
+  await refresh();
+ }catch(e){toast(e.message,true)}
 }
 function flowShowAddForm(bulk){
  const area=$('#flowAddForm'),field=$('#flowEmailList'),label=$('#flowAddLabel');
