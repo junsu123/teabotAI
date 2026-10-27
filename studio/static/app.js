@@ -129,7 +129,7 @@ function flowView(){
   const stateClass=!a.enabled?'off':!a.fresh?'stale':'on';
   const masked=flowMaskEmail(a.email);
   const profile=profiles[a.email]||null;
-  const profileState=profile?.status==='checking_credits'?'Đang đọc tín dụng':profile?.status==='credits_unavailable'?'Đọc điểm chưa thành công':profile?.status==='credits_updated'?'Đã lấy điểm từ Flow':profile?.in_use?'Đang mở Chrome':profile?.status==='error'?'Lỗi mở Chrome':profile?'Đã tạo profile':'Chưa tạo profile';
+  const profileState=profile?.status==='signin_pending'?'Đang chờ đăng nhập':profile?.status==='signin_verifying'?'Đang xác minh Gmail/điểm':profile?.status==='signin_wrong_account'?'Đăng nhập nhầm Gmail':profile?.status==='signin_captured'?'Đã nhận điểm, đang đóng':profile?.status==='signin_timeout'?'Chưa xác minh được':profile?.status==='signin_unmonitored'?'Không theo dõi được':profile?.status==='checking_credits'?'Đang đọc tín dụng':profile?.status==='credits_unavailable'?'Đọc điểm chưa thành công':profile?.status==='credits_updated'?'Đã lấy điểm từ Flow':profile?.in_use?'Đang mở Chrome':profile?.status==='error'?'Lỗi mở Chrome':profile?'Đã tạo profile':'Chưa tạo profile';
   return `<tr data-email="${h(a.email)}">
     <td class="flow-index">${i+1}</td>
     <td><button class="flow-switch ${a.enabled?'is-on':''}" type="button" role="switch" aria-checked="${Boolean(a.enabled)}" aria-label="${a.enabled?'Tạm tắt':'Bật lại'} ${h(a.email)}" onclick="flowToggleAccount(this,${!a.enabled})"><span></span></button></td>
@@ -183,7 +183,7 @@ function flowView(){
    <div class="flow-add-cards">
     <div class="flow-add-card">
       <b>Đăng nhập trình duyệt</b>
-      <p class="flow-green-note small">Mỗi Gmail tạo một Chrome profile riêng. Sau khi thêm một Gmail, Chrome sẽ mở để bạn đăng nhập thủ công. Lần sau vẫn dùng profile đó.</p>
+      <p class="flow-green-note small">Mỗi Gmail có một profile riêng. Thêm một Gmail sẽ mở Chrome cho bạn đăng nhập; nếu xác minh đúng Gmail và số tín dụng, Chrome sẽ tự đóng. Cookie chỉ lưu trong Chrome.</p>
       <div class="flow-card-buttons">
        <button class="flow-btn blue" type="button" onclick="flowShowAddForm(false)">＋ Thêm tài khoản</button>
        <button class="flow-btn purple" type="button" onclick="flowShowAddForm(true)">＋ Thêm theo danh sách</button>
@@ -327,7 +327,7 @@ async function flowAddAccounts(){
   const result=await api('flow/accounts/add',{emails:mails});
   toast(result.message);await refresh();
   // Opening is user initiated by clicking Add/Save; bulk creation must not open 100 windows.
-  if(result.emails?.length===1)await flowOpenProfileEmail(result.emails[0]);
+  if(result.emails?.length===1)await flowStartLogin(result.emails[0]);
   else toast('Đã tạo '+(result.profiles_ready||0)+' profile. Chọn nút ◎ của mỗi Gmail để đăng nhập.');
  }catch(e){toast(e.message,true)}
 }
@@ -358,6 +358,37 @@ async function flowWatchCredits(email){
   }
  }
  toast('Đang chờ Flow phản hồi. Bạn có thể nhấn Làm mới tất cả để xem kết quả.',true);
+}
+async function flowStartLogin(email){
+ try{
+  const result=await api('flow/profiles/login',{email});
+  toast(result.message||'Đã yêu cầu mở Chrome để đăng nhập Google Flow');
+  await refresh();
+  flowWatchLogin(email);
+ }catch(e){toast('Không mở được Chrome để đăng nhập: '+e.message,true)}
+}
+let flowLoginWatchers=new Set();
+async function flowWatchLogin(email){
+ if(flowLoginWatchers.has(email))return;
+ flowLoginWatchers.add(email);
+ try{
+  for(let i=0;i<240;i++){
+   await new Promise(resolve=>setTimeout(resolve,2500));
+   if(activeView!=='flow')return;
+   await refresh();
+   const profile=data.flow_browser_profiles?.[email];
+   if(profile?.status==='credits_updated'){
+    const a=(data.flow_accounts||[]).find(x=>x.email===email);
+    toast('Đăng nhập và cập nhật tín dụng hoàn tất: '+(a?.balance??'?')+' điểm. Chrome đã đóng.');
+    return;
+   }
+   if(['signin_unmonitored','signin_timeout','closed','error'].includes(profile?.status)){
+    toast(profile?.message||'Chưa xác minh được Gmail. Mở profile ◎ để đăng nhập thủ công.',true);
+    return;
+   }
+  }
+ }catch(e){toast('Không tải được trạng thái đăng nhập: '+e.message,true)}
+ finally{flowLoginWatchers.delete(email)}
 }
 async function flowOpenProfileEmail(email){
  if(!email){toast('Chưa chọn Gmail Flow',true);return}
