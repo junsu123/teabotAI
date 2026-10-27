@@ -177,6 +177,8 @@ def wait_for_dom_account(chrome,folder,*,timeout_seconds=900,
             "http://127.0.0.1:"+str(port),timeout=6000)
         current=None
         stable=0
+        ui_current=None
+        ui_stable=0
         opened=set()
         end=clock()+max(0,timeout_seconds)
         while chrome.poll() is None and clock()<end:
@@ -199,8 +201,23 @@ def wait_for_dom_account(chrome,folder,*,timeout_seconds=900,
                 if reading:break
             stable=stable+1 if reading and reading==current else 1 if reading else 0
             current=reading
+            windows=flow_uia.owned_chrome_windows(chrome.pid)
+            ui_reading=None
+            ui_window=None
+            for window in windows:
+                try:
+                    values=flow_uia.extract_account(flow_uia.visible_text_labels(window))
+                    if values:
+                        ui_reading=values
+                        ui_window=window
+                        break
+                except Exception:
+                    continue
+            ui_stable=ui_stable+1 if ui_reading and ui_reading==ui_current else 1 if ui_reading else 0
+            ui_current=ui_reading
             if stable>=2:
-                windows=flow_uia.owned_chrome_windows(chrome.pid)
                 return reading[0],reading[1],windows[0] if windows else None
+            if ui_stable>=2:
+                return ui_reading[0],ui_reading[1],ui_window
             sleep(polling_seconds)
     return None
