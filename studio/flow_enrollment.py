@@ -21,7 +21,7 @@ import flow_profiles
 ROOT = Path(__file__).resolve().parent
 PROFILES = flow_profiles.PROFILES
 RECORDS = ROOT / "data" / "flow_enrollments"
-TERMINAL = {"completed", "duplicate", "cancelled", "failed"}
+TERMINAL = {"completed", "duplicate", "cancelled", "failed", "needs_manual"}
 MAX_SECONDS = 900
 
 
@@ -90,7 +90,7 @@ def start(db_path, profiles_dir=None, records_dir=None):
 def detect_visible_account(page):
     """Read displayed Gmail and credit text only from a labs.google Flow tab."""
     try:
-        if page.is_closed() or urlparse(page.url).hostname != "labs.google":
+        if page.is_closed() or urlparse(page.url).hostname not in ("labs.google", "flow.google.com"):
             return None
         email_node = page.locator("flow-account-panel .user-email, .user-email").first
         if not email_node.is_visible():
@@ -142,9 +142,58 @@ def register_verified(db_path, enrollment_id, email, credits):
     return email
 
 
+def inspect_logged_in_profile(folder):
+    """Read-only inspection AFTER the ordinary Chrome sign-in window closes.
+
+    Google may refuse scripted browsers. Failure never deletes the login data
+    and never attempts another sign-in or bypasses account security.
+    """
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as pw:
+        context = pw.chromium.launch_persistent_context(
+            user_data_dir=str(folder), channel="chrome", headless=True,
+            accept_downloads=False, viewport={"width": 1400, "height": 900})
+        try:
+            page = context.pages[0] if context.pages else context.new_page()
+            page.goto(flow_profiles.FLOW_URL, wait_until="domcontentloaded", timeout=35000)
+            for _ in range(4):
+                account = inspect_context(context)
+                if account:
+                    return account
+                page.wait_for_timeout(1500)
+            return None
+        finally:
+            context.close()
+
+
+def complete_manually(db_path, enrollment_id, email, credits, profiles_dir=None,
+                      records_dir=None):
+    """Fallback only: after Chrome has CLOSED, owner confirms visible details."""
+    root = Path(profiles_dir) if profiles_dir is not None else PROFILES
+    records = Path(records_dir) if records_dir is not None else RECORDS
+    current = get_status(enrollment_id, records)
+    if current["status"] != "needs_manual":
+        raise ValueError("Chỉ xác nhận thủ công sau khi Chrome đã đóng và chưa đọc được thông tin")
+    info = root / enrollment_id
+    if not info.is_dir() or (info / flow_profiles.LOCK_NAME).exists():
+        raise ValueError("Profile vẫn đang mở; hãy đóng Chrome trước")
+    email = flow_accounts.normalize_email(email)
+    if isinstance(credits, bool) or not isinstance(credits, int) or not 0 <= credits <= 1000000:
+        raise ValueError("Điểm phải là số nguyên không âm")
+    register_verified(db_path, enrollment_id, email, credits)
+    return save_status(enrollment_id, "completed",
+                       "Đã lưu Gmail do bạn xác nhận và Chrome profile đã đăng nhập.",
+                       email=email, credits=credits, records_dir=records)
+
+
 def worker(db_path, enrollment_id, token, profiles_dir=None, records_dir=None,
            timeout_seconds=MAX_SECONDS, check_interval=2):
-    """Observe manual sign-in, save discovered Gmail + credit, then close browser."""
+    """Launch actual installed Chrome. The human performs ALL Google sign-in.
+
+    This browser is not started by Playwright, Chromium, a WebView or CDP.
+    After the user closes Chrome, optionally inspect already-signed-in Flow.
+    Chrome keeps its cookies only in the private local profile directory.
+    """
     root = Path(profiles_dir) if profiles_dir is not None else PROFILES
     records = Path(records_dir) if records_dir is not None else RECORDS
     folder = root / enrollment_id
@@ -152,71 +201,54 @@ def worker(db_path, enrollment_id, token, profiles_dir=None, records_dir=None,
     if (not flow_profiles.ID_RE.fullmatch(token) or not lock.is_file()
             or lock.read_text(encoding="utf-8") != token):
         raise RuntimeError("Khóa Chrome profile không hợp lệ")
-    completed = False
+    registered = False
+    remove_temporary = False
     try:
-        from playwright.sync_api import sync_playwright
+        exe = flow_profiles.chrome_binary()
         save_status(enrollment_id, "signin_pending",
-                    "Hãy đăng nhập Google Flow trong cửa sổ Chrome.", records_dir=records)
-        with sync_playwright() as pw:
-            context = pw.chromium.launch_persistent_context(
-                user_data_dir=str(folder), channel="chrome", headless=False,
-                accept_downloads=False, viewport={"width": 1400, "height": 900})
+                    "Chrome thông thường đã mở. Hãy đăng nhập Google Flow, sau đó ĐÓNG cửa sổ Chrome để đọc tài khoản.",
+                    records_dir=records)
+        chrome = subprocess.Popen(
+            [exe, "--user-data-dir=" + str(folder), "--new-window",
+             "--no-first-run", flow_profiles.FLOW_URL],
+            cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        chrome.wait()
+        save_status(enrollment_id, "inspecting",
+                    "Đã đóng Chrome. Đang đọc Gmail và số tín dụng từ phiên đã lưu.",
+                    records_dir=records)
+        # Browser must be fully closed before another reader uses this directory.
+        try:
+            observed = inspect_logged_in_profile(folder)
+        except Exception:
             observed = None
-            try:
-                page = context.pages[0] if context.pages else context.new_page()
-                try:
-                    page.goto(flow_profiles.FLOW_URL, wait_until="domcontentloaded", timeout=60000)
-                except Exception:
-                    pass
-                deadline = time.monotonic() + timeout_seconds
-                while time.monotonic() < deadline:
-                    alive = [p for p in context.pages if not p.is_closed()]
-                    if not alive:
-                        break
-                    observed = inspect_context(context)
-                    if observed:
-                        save_status(enrollment_id, "capturing", "Đã nhận dạng Gmail và tín dụng; đang đóng Chrome để lưu phiên.",
-                                    records_dir=records)
-                        break
-                    try:
-                        alive[0].wait_for_timeout(int(check_interval * 1000))
-                    except Exception:
-                        break
-                if observed is None and any(not p.is_closed() for p in context.pages):
-                    save_status(enrollment_id, "signin_timeout",
-                                "Chưa đọc được Gmail và tín dụng. Hãy đóng Chrome thủ công.",
-                                records_dir=records)
-                    while True:
-                        alive = [p for p in context.pages if not p.is_closed()]
-                        if not alive:
-                            break
-                        try:
-                            alive[0].wait_for_timeout(1200)
-                        except Exception:
-                            break
-            finally:
-                context.close()
         if observed:
             email, credits = observed
             try:
                 register_verified(db_path, enrollment_id, email, credits)
-                completed = True
+                registered = True
                 save_status(enrollment_id, "completed",
-                            "Đã lấy Gmail và tín dụng. Chrome profile đã đóng.",
+                            "Đã lấy Gmail và tín dụng từ phiên Chrome và lưu tài khoản.",
                             email=email, credits=credits, records_dir=records)
             except ValueError as exc:
                 if str(exc) != "DUPLICATE_EMAIL":
                     raise
+                remove_temporary = True
                 save_status(enrollment_id, "duplicate",
-                            "Gmail này đã tồn tại. Profile cũ được giữ nguyên.",
+                            "Gmail đã tồn tại. Profile cũ và điểm cũ được giữ nguyên.",
                             records_dir=records)
         else:
-            save_status(enrollment_id, "cancelled",
-                        "Đã đóng Chrome trước khi xác minh tài khoản.",
+            # IMPORTANT: Preserve the authenticated profile; a DOM selector
+            # failure should not destroy the user's completed Google login.
+            save_status(enrollment_id, "needs_manual",
+                        "Đã lưu phiên Chrome nhưng chưa đọc được Gmail/điểm. Có thể xác nhận thủ công trong phần mềm.",
                         records_dir=records)
+    except FileNotFoundError:
+        remove_temporary = True
+        save_status(enrollment_id, "failed", "Không tìm thấy Google Chrome được cài đặt.",
+                    records_dir=records)
     except Exception as exc:
         save_status(enrollment_id, "failed",
-                    "Thêm tài khoản thất bại (" + type(exc).__name__ + "). Hãy thử lại.",
+                    "Chrome hoặc kiểm tra dữ liệu gặp lỗi: " + type(exc).__name__,
                     records_dir=records)
     finally:
         try:
@@ -224,7 +256,7 @@ def worker(db_path, enrollment_id, token, profiles_dir=None, records_dir=None,
                 lock.unlink(missing_ok=True)
         except OSError:
             pass
-        if not completed:
+        if remove_temporary and not registered:
             shutil.rmtree(folder, ignore_errors=True)
 
 
