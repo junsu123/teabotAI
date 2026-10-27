@@ -111,3 +111,16 @@ Liên kết lưu lâu dài: `flow_jobs.email` → `flow_browser_profiles.email` 
 - Cookie, mật khẩu, mã OTP và token đăng nhập **không được xuất, đọc, gửi về API hoặc lưu vào SQLite**. Chrome tự quản lý cookie trong thư mục profile riêng (đã được `.gitignore` loại trừ).
 - Chỉ **Thêm theo danh sách** mới tiếp tục có ô nhập nhiều địa chỉ Gmail. Đây là chế độ khác với nút + Thêm tài khoản.
 - Chức năng đọc nội dung trang không phải API Google chính thức. Nếu Google thay đổi bố cục hoặc từ chối trình duyệt tự động hóa, bảng sẽ hiển thị trạng thái lỗi và không lưu một Gmail chưa xác minh; cần kiểm tra thực tế trên Windows.
+
+## Khắc phục Google chặn đăng nhập bằng trình duyệt tự động (27/10/2026)
+
+Google có thể trả về `Couldn't sign you in` khi Playwright trực tiếp khởi chạy Chrome (và Chrome hiển thị cảnh báo `--no-sandbox`). Vì vậy **nút + Thêm tài khoản không dùng Playwright lúc đăng nhập nữa**.
+
+- **Bấm + Thêm tài khoản:** ứng dụng tạo thư mục Chrome riêng và dùng Google Chrome cài trên máy với `--user-data-dir`, `--new-window`. Không thêm `--no-sandbox`, `--remote-debugging-port`, cờ bỏ qua xác minh hay sửa user-agent.
+- **Bạn đăng nhập trong cửa sổ Google Chrome thật**, tự vượt qua các bước xác minh hợp lệ nếu Google yêu cầu. **Sau khi đăng nhập thành công, đóng cửa sổ Chrome**. Chương trình mới thử đọc trang Flow ở chế độ chỉ đọc, trên chính profile vừa đăng nhập.
+- Nếu đọc được `.user-email` và `.credits-count` trên `labs.google` hoặc `flow.google.com`, Gmail và số dư được gắn vào profile; không cần nhập Gmail trước.
+- **Nếu không đọc được:** profile chưa bị xóa. Chương trình cho phép xác nhận Gmail và số dư mà bạn đã nhìn thấy trên trang để sử dụng lại phiên Chrome đang lưu (chỉ xảy ra như phương án dự phòng). Không tuyên bố tự động thành công khi chưa xác minh.
+- Nếu nhập Gmail đã được lưu trước đây, chương trình không ghi đè Chrome profile hay tín dụng cũ.
+- **Không thể bảo đảm tự đóng cửa sổ ngay khi đăng nhập** nếu không điều khiển Chrome trong bước đăng nhập; phiên bản an toàn này yêu cầu bạn tự đóng Chrome rồi mới đọc dữ liệu.
+- Chrome tiếp tục tự quản lý cookie trong thư mục riêng, không xuất cookie thô ra phần mềm, GitHub hoặc file JSON.
+- Tài khoản đăng nhập với Chrome đã qua kiểm tra thủ công vẫn có thể bị Google yêu cầu đăng nhập lại; không có cơ chế vượt qua chính sách bảo mật Google.
