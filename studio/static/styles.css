@@ -182,3 +182,24 @@ html,body{max-width:100%}
 @media(prefers-reduced-motion:reduce){
  .sidebar{transition:none}
 }
+
+/* CEO-generated, on-demand script preview below the saved Veo template. */
+.veo-sample-controls{margin:16px 0 12px;padding:16px;border:1px solid #396a7e;
+ background:linear-gradient(135deg,#102d40,#123b49);border-radius:12px}
+.veo-sample-controls h4{font-size:15px;margin:0 0 7px;color:#d3fff4}
+.veo-sample-controls>.tagline{line-height:1.55;margin-bottom:11px}
+.veo-sample-controls .video-form-grid{margin:10px 0}
+.veo-sample-controls input,.veo-sample-controls textarea{width:100%;max-width:100%}
+.veo-sample-controls .video-card-actions{align-items:center}
+.veo-sample-controls .hint{max-width:460px;font-size:12px;line-height:1.5}
+.veo-sample-preview{margin:18px 0 0;padding-top:16px;border-top:1px solid #3f7280}
+.veo-sample-preview[hidden]{display:none}
+.veo-sample-preview>.video-work-top h4{font-size:15px;color:#d5f9f1;margin:0}
+.veo-sample-preview .video-scene-card{margin:10px 0;padding:13px}
+.veo-sample-preview .video-scene-card .tagline{line-height:1.5;margin:8px 0}
+@media(max-width:680px){
+ .veo-sample-controls{padding:12px}
+ .veo-sample-controls .video-card-actions{align-items:stretch;flex-direction:column}
+ .veo-sample-controls .video-card-actions button{width:100%}
+ .veo-sample-preview>.video-work-top{align-items:stretch}
+}
