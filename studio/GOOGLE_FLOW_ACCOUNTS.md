@@ -126,44 +126,18 @@ Google có thể trả về `Couldn't sign you in` khi Playwright trực tiếp 
 - Tài khoản đăng nhập với Chrome đã qua kiểm tra thủ công vẫn có thể bị Google yêu cầu đăng nhập lại; không có cơ chế vượt qua chính sách bảo mật Google.
 
 
-## Sửa lỗi không lấy Gmail/điểm và không tự đóng Chrome (28/10/2026)
+## Luồng hiện hành: Windows UI Automation, KHÔNG cần cài Extension (28/10/2026)
 
-**Nguyên nhân cũ:** Đăng nhập diễn ra trong Google Chrome thông thường, nhưng sau
-khi đóng cửa sổ, ứng dụng lại khởi động Chrome qua Playwright *lần thứ hai* để
-đọc nội dung. Cách này thường không nhìn thấy tài khoản, dữ liệu tải không xong
-hoặc bị Google hạn chế. Ứng dụng cũng không thể tự đóng cửa sổ khi hoàn thành
-vì nó chỉ đọc dữ liệu sau khi bạn chủ động đóng.
+**Phần này thay thế các mô tả về Extension và Playwright đăng nhập ở các mục lịch sử phía trên.**
 
-**Cách mới (cần cài tiện ích trong mỗi Chrome profile mới):**
+1. Trên Windows, cập nhật code và chạy `studio/setup_windows.bat` **một lần** để cài `pywinauto`, là thư viện Windows UI Automation. Đây là thư viện Python cho Mars Studio, **không phải tiện ích trình duyệt**.
+2. Nhấn **+ Thêm tài khoản**. Mars Studio tạo Chrome profile trống độc lập, mở đúng Chrome đã cài với `--user-data-dir` riêng và trang Google Flow; không yêu cầu nhập Gmail trước.
+3. Đăng nhập tài khoản Google bằng chính cửa sổ Chrome đó. **Mở menu ảnh đại diện** để các thông tin email và tín dụng hiển thị trên màn hình (ví dụ `owner@gmail.com`, `996 tín dụng Google Flow`). Bạn không cần F5 hay cài `Load unpacked`.
+4. Windows UI Automation chỉ đọc các tên Text/Hyperlink trợ năng của **cửa sổ Chrome thuộc đúng tiến trình/profile vừa mở**, bỏ qua các trường Edit/Password. Phần mềm yêu cầu **hai lần đọc liên tiếp giống nhau**, đúng một email hợp lệ và một giá trị tín dụng có nhãn Google Flow.
+5. Sau khi xác minh, lưu Gmail, số điểm, thời gian và ID profile bằng một giao dịch SQLite, sau đó **yêu cầu đóng nhẹ nhàng đúng cửa sổ Chrome đó**. Chrome tự lưu cookie/session vào profile như bình thường; phần mềm không đọc cookie, token, mật khẩu hoặc OTP.
+6. Nếu Gmail đã nằm trong danh sách, không ghi đè Gmail/điểm/profile cũ. Profile tạm mới bị dọn sau khi cửa sổ Chrome đóng.
+7. Nếu thiếu quyền trợ năng, phiên Chrome không hiển thị email/điểm, hoặc Google đổi cấu trúc trợ năng: phần mềm **giữ nguyên phiên đăng nhập** và thông báo bạn đóng Chrome, sau đó có thể tự xác nhận Gmail/điểm để gắn đúng profile. Số do bạn xác nhận có nguồn `manual`, còn số UIA đọc được có nguồn `browser_uia`.
 
-1. Bấm **+ Thêm tài khoản**; Mars Studio tạo Chrome profile trống và mở
-   một tab **Ghép Chrome với TEA Mars** cùng tab Google Flow.
-2. Trong Chrome **của profile vừa tạo**, vào `chrome://extensions/`,
-   bật **Developer Mode**, chọn **Load unpacked** và thư mục:
-   `studio/flow_extension/` (trong project teabotAI; UI hiển thị đường
-   dẫn tuyệt đối).
-3. Trở về tab **Ghép Chrome với TEA Mars**, bấm **F5**. Phải thấy thông báo
-   đã ghép. Trở về tab **Google Flow**, bấm **F5** sau khi cài tiện ích.
-4. Đăng nhập Google bằng Chrome thường. Nhấn vào ảnh tài khoản nếu cần để
-   hiển thị email và tín dụng.
-5. Tiện ích chỉ đọc **nội dung hiện trên trang Flow**:
-   `.user-email` và `.credits-count`. Nó gửi đúng **email và số điểm**
-   cùng mã ghép tạm về `127.0.0.1`. Không đọc cookie, mật khẩu, token,
-   mã OTP, lịch sử hay network payload.
-6. Backend kiểm tra mã ghép + dữ liệu, lưu Gmail/điểm gắn với đúng thư mục
-   Chrome profile rồi phản hồi thành công. **Chỉ sau bước lưu thành công**
-   tiện ích mới đóng cửa sổ Chrome bằng API chính thức của Chrome.
-7. Nếu đã đăng nhập mà chưa thấy phản hồi, hãy kiểm tra tab ghép, tải lại
-   tab Flow và mở menu tài khoản để các trường hiện ra. Nếu không cài tiện
-   ích, bạn vẫn có thể **tự đóng Chrome** rồi xác nhận Gmail/điểm bằng
-   form dự phòng, profile đã đăng nhập không bị xóa.
+**Lưu ý về độ tin cậy:** Windows UI Automation của Chrome có từ Chrome 138, nhưng **không bảo đảm mọi thành phần Google Flow đều được đưa vào cây trợ năng**. Chức năng này là best-effort, **không phải API chính thức của Google**. Chưa có kiểm thử đăng nhập trực tiếp trên máy Windows của bạn. Nếu phần mềm không đọc được số, hãy nhấn vào menu tài khoản để hiện thông tin và kiểm tra thư viện pywinauto đã được cài.
 
-**Lưu ý:** Từ Chrome 137, `--load-extension` không hoạt động trong bản Google
-Chrome chính thức. Vì vậy người dùng **cần chủ động cài tiện ích một lần cho
-mỗi Chrome profile**; không thể tự ý cài ngầm bằng cờ mở trình duyệt. Đây là
-tiện ích mã nguồn mở đặt ngay trong repository, chỉ có quyền đọc hai trường
-hiển thị trên Google Flow và liên lạc với Mars Studio cục bộ.
-
-Không tự động tạo video, không sửa quyền xác thực Google, không vượt CAPTCHA
-hoặc giới hạn tín dụng. Chưa thử Chrome trên Windows thật; kiểm thử CI chỉ
-xác minh thuật toán và tuyến API trong mô phỏng.
+**Các thao tác khác:** Nút Reload tín dụng của tài khoản có sẵn vẫn sử dụng luồng kiểm tra riêng và cần kiểm chứng thực tế; thay đổi này áp dụng cho **bước + Thêm tài khoản mới**. Toàn bộ dữ liệu Chrome vẫn lưu dưới `studio/data/flow_chrome_profiles/` và không tải lên GitHub.

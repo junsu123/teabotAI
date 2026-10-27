@@ -159,7 +159,8 @@ def _account_rows(c):
         row["reserved"]=reserved.get(row["email"],0)
         row["available"]=max(0,row["balance"]-row["reserved"]) if row["balance"] is not None else None
         row["eligible"]=bool(row["enabled"]) and row["fresh"] and row["available"] is not None
-        row["verified_by"]={"manual":"manual","browser_dom":"browser_dom"}.get(row["balance_source"],"unknown")
+        row["verified_by"]={"manual":"manual","browser_dom":"browser_dom",
+                            "browser_uia":"browser_uia"}.get(row["balance_source"],"unknown")
         data.append(row)
     return data
 

@@ -373,13 +373,3 @@ html,body{max-width:100%}
 .flow-ui #flowAddAccountButton.flow-opening:disabled:hover{
  filter:none;
 }
-
-/* Guided, explicit opt-in per-Chrome-profile Flow extension setup. */
-.flow-extension-setup{display:flex;flex-wrap:wrap;align-items:center;gap:7px 10px;
- width:100%;padding:10px 12px;margin-top:5px;background:#23303a;
- border:1px solid #528d88;border-radius:6px;color:#dfefed;font-size:12px}
-.flow-extension-setup>b{flex-basis:100%;font-size:12px}
-.flow-extension-setup>span{flex-basis:100%;line-height:1.65}
-.flow-extension-setup>code{flex:1 1 240px;overflow-wrap:anywhere;
- padding:8px 10px;background:#101d27;border-radius:5px;user-select:all}
-.flow-extension-setup>button{flex:0 0 auto}
