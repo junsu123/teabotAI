@@ -17,6 +17,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+from urllib.parse import urlparse
 import time
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -147,7 +148,8 @@ def list_profiles(db_path, profiles_dir=None):
             if f.is_file():
                 doc = json.loads(f.read_text(encoding="utf-8"))
                 if isinstance(doc, dict) and doc.get("status") in {
-                    "created", "opening", "open", "closed", "error"
+                    "created", "opening", "open", "closed", "error",
+                    "checking_credits", "credits_updated", "credits_unavailable"
                 }:
                     status = doc["status"]
                     message = str(doc.get("message") or "")[:180]
@@ -207,6 +209,146 @@ def launch_for_job(db_path, job_id, profiles_dir=None):
     return _launch_for_profile(db_path, profile_for_job(db_path, job_id, profiles_dir), profiles_dir)
 
 
+def parse_credit_text(text):
+    """Parse the UI's integer credit total; 1.016 / 1,016 => 1016.
+
+    Refuse decimals and ambiguous formats instead of recording wrong balances.
+    """
+    if not isinstance(text, str):
+        raise ValueError("Không đọc được chuỗi tín dụng")
+    value = text.strip().replace("\u00a0", " ").replace("\u202f", " ")
+    match = re.match(r"^(\d{1,3}(?:[., ]\d{3})+|\d{1,7})(?![\d.,])", value)
+    if not match:
+        raise ValueError("Định dạng tín dụng Flow chưa được hỗ trợ")
+    number = int(re.sub(r"[., ]", "", match.group(1)))
+    if number > 1000000:
+        raise ValueError("Số dư nằm ngoài giới hạn phần mềm")
+    if not re.search(r"(?:tín\s*dụng|credits?|Google\s*Flow)", value, re.I):
+        # The short class name can be reused by the site. Require label context.
+        raise ValueError("Không có nhãn tín dụng Google Flow")
+    return number
+
+
+def credit_from_dom(page):
+    """Read visible text only. Never access cookies, localStorage, tokens or APIs."""
+    selector = "a.credits-link span.credits-count, .credits-info span.credits-count"
+    for attempt in range(2):
+        try:
+            node = page.locator(selector).first
+            node.wait_for(state="visible", timeout=5500 if attempt else 2500)
+            return parse_credit_text(node.inner_text(timeout=2500))
+        except ValueError:
+            raise
+        except Exception:
+            if attempt:
+                break
+            # Credits are often in the account dropdown. Open only controls
+            # labelled as an account/profile control, never arbitrary buttons.
+            openers = [
+                "button[aria-label*='account' i]",
+                "button[aria-label*='profile' i]",
+                "button[aria-label*='tài khoản' i]",
+                "button:has(img[alt*='avatar' i])",
+                "button:has(img[alt*='profile' i])",
+            ]
+            for candidate in openers:
+                try:
+                    btn = page.locator(candidate).first
+                    if btn.is_visible():
+                        btn.click(timeout=2000)
+                        break
+                except Exception:
+                    continue
+    raise ValueError(
+        "Không tìm thấy số dư Flow đang hiển thị. Đảm bảo bạn đăng nhập "
+        "đúng Gmail trong Chrome profile; giao diện Flow có thể đã thay đổi."
+    )
+
+
+def read_profile_credits(db_path, email, profiles_dir=None):
+    """One read-only, on-demand browser inspection using the saved Chrome profile.
+
+    This is UI text extraction, not a supported/official Google credits API.
+    It must run when the normal profile window is CLOSED (same profile directory).
+    """
+    info = ensure_profile(db_path, email, profiles_dir)
+    folder = info["folder"]
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as playwright:
+        context = playwright.chromium.launch_persistent_context(
+            user_data_dir=str(folder), channel="chrome", headless=True,
+            accept_downloads=False, viewport={"width": 1400, "height": 950},
+        )
+        try:
+            page = context.pages[0] if context.pages else context.new_page()
+            page.goto(FLOW_URL, wait_until="domcontentloaded", timeout=35000)
+            if urlparse(page.url).hostname != "labs.google":
+                raise ValueError("Profile chưa đăng nhập Google Flow hoặc bị chuyển trang xác thực")
+            balance = credit_from_dom(page)
+        finally:
+            context.close()
+    flow_accounts.update_browser_balance(db_path, email, balance)
+    return balance
+
+
+def _reserve_credit_worker(db_path, info, profiles_dir=None):
+    root = Path(profiles_dir) if profiles_dir is not None else PROFILES
+    folder = info["folder"]
+    lock = folder / LOCK_NAME
+    token = uuid4().hex
+    try:
+        fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError as exc:
+        raise ValueError(
+            "Hãy đóng cửa sổ Chrome của Gmail này trước khi đọc điểm tín dụng."
+        ) from exc
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(token)
+        _write_status(folder, "checking_credits", "Đang đọc tín dụng trên Flow bằng Chrome profile riêng")
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+        subprocess.Popen(
+            [sys.executable, str(Path(__file__).resolve()), "credits-worker",
+             str(Path(db_path).resolve()), info["email"], token, str(root.resolve())],
+            cwd=str(ROOT), creationflags=flags, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, close_fds=True)
+        return {"ok": True, "email": info["email"],
+                "message": "Đã bắt đầu kiểm tra điểm trên Chrome profile riêng. Đợi kết quả hiển thị trong bảng."}
+    except Exception:
+        lock.unlink(missing_ok=True)
+        _write_status(folder, "credits_unavailable", "Không khởi động được phép đọc tín dụng")
+        raise
+
+
+def request_credit_check(db_path, email, profiles_dir=None):
+    return _reserve_credit_worker(
+        db_path, ensure_profile(db_path, email, profiles_dir), profiles_dir)
+
+
+def credit_worker(db_path, email, token, profiles_dir=None):
+    info = ensure_profile(db_path, email, profiles_dir)
+    folder = info["folder"]
+    lock = folder / LOCK_NAME
+    if not ID_RE.fullmatch(token) or not lock.is_file() or lock.read_text(encoding="utf-8") != token:
+        raise RuntimeError("Không có khóa Chrome profile hợp lệ")
+    try:
+        balance = read_profile_credits(db_path, email, profiles_dir)
+        _write_status(folder, "credits_updated", "Đã đọc " + str(balance) +
+                      " tín dụng từ giao diện Google Flow")
+    except Exception as exc:
+        # Do not overwrite the last known balance on login errors/DOM changes.
+        message = str(exc) if isinstance(exc, ValueError) else (
+            "Lỗi đọc tín dụng (" + type(exc).__name__ +
+            "). Kiểm tra Chrome/Playwright và thử lại sau khi đăng nhập.")
+        _write_status(folder, "credits_unavailable", message)
+    finally:
+        try:
+            if lock.read_text(encoding="utf-8") == token:
+                lock.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def chrome_binary():
     """Use normal installed Google Chrome: manual login, no automation flags."""
     candidates = []
@@ -249,6 +391,17 @@ def browser_worker(db_path, email, token, profiles_dir=None):
         _write_status(folder, "open", "Chrome profile đã mở để đăng nhập Google thủ công")
         chrome.wait()
         _write_status(folder, "closed", "Đã đóng Chrome profile")
+        # Inspect the displayed balance after manual sign-in Chrome exits.
+        # Browser profile is no longer in use by the normal Chrome process.
+        try:
+            balance = read_profile_credits(db_path, email, profiles_dir)
+            _write_status(folder, "credits_updated",
+                          "Đã đọc " + str(balance) + " tín dụng sau khi đóng Chrome")
+        except Exception as exc:
+            detail = str(exc) if isinstance(exc, ValueError) else (
+                "Không tự đọc được tín dụng (" + type(exc).__name__ +
+                "). Dùng nút Đọc tín dụng khi cần.")
+            _write_status(folder, "credits_unavailable", detail)
     except Exception as exc:
         _write_status(folder, "error", "Không mở được Chrome: " + type(exc).__name__ +
                       ". Cần cài Google Chrome trên máy.")
@@ -261,6 +414,10 @@ def browser_worker(db_path, email, token, profiles_dir=None):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 6 or sys.argv[1] != "open-worker":
-        raise SystemExit("Only the local dashboard can start a Flow browser profile")
-    browser_worker(Path(sys.argv[2]), sys.argv[3], sys.argv[4], Path(sys.argv[5]))
+    if len(sys.argv) != 6 or sys.argv[1] not in ("open-worker", "credits-worker"):
+        raise SystemExit("Only the local dashboard can start a Flow profile worker")
+    args = (Path(sys.argv[2]), sys.argv[3], sys.argv[4], Path(sys.argv[5]))
+    if sys.argv[1] == "open-worker":
+        browser_worker(*args)
+    else:
+        credit_worker(*args)
