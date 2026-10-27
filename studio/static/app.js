@@ -3,7 +3,7 @@ const h = x => String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':
 const $ = s => document.querySelector(s);
 let data={agents:[],accounts:[],jobs:[],missions:[],learnings:[],products:{},proxies:[],training:[],stats:{}}, activeView='hq', focusAgent=null, sceneScale=1, sceneMode='mars';
 let forumMissionId=0,forumData=null,forumBusy=false;
-const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',video:'Xưởng SEO & Veo 3',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt AI & Telegram',dom:'Học đăng bài'};
+const labels={hq:'Trụ sở AI',agents:'Nhân viên AI',missions:'Giao nhiệm vụ CEO',forum:'Phòng họp AI',video:'Xưởng SEO & Veo 3',shops:'Gian hàng & Profile',proxies:'Kho Proxy',products:'Kho sản phẩm',jobs:'Đơn đăng sản phẩm',memory:'Bộ nhớ tự học',telegram:'Telegram Bot',settings:'Cài đặt Gemini / Groq / AI',dom:'Học đăng bài'};
 async function api(endpoint, body=null){
  const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),endpoint==='overview'?6000:endpoint.endsWith('/test-saved-agent')?55000:endpoint.endsWith('/test-chat')?30000:endpoint.endsWith('/test')?20000:12000);
  const opts=body===null?{signal:ctrl.signal}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal};
@@ -32,9 +32,20 @@ const eButton=(text,fn='')=>`<button class="primary-btn" ${fn}>${text}</button>`
 const tag=(s)=>`<span class="chip ${s==='tiktok'?'purple':s==='shopee'?'orange':s==='done'?'':'gray'}">${h(s)}</span>`;
 const fmtDate=s=>{if(!s)return '—';try{return new Date(s).toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}catch{return s}};
 const empty=(icon,title,desc)=>`<div class="empty"><span class="large">${icon}</span><b>${title}</b><div>${desc}</div></div>`;
+function setMobileMenu(open){
+ const expanded=Boolean(open&&window.matchMedia('(max-width: 920px)').matches);
+ document.body.classList.toggle('menu-open',expanded);
+ const toggle=$('#mobileMenuButton'),backdrop=$('#sidebarBackdrop');
+ if(toggle){
+  toggle.setAttribute('aria-expanded',String(expanded));
+  toggle.setAttribute('aria-label',expanded?'Đóng menu điều hướng':'Mở menu điều hướng');
+ }
+ if(backdrop)backdrop.hidden=!expanded;
+}
 function navigate(view){
- if(activeView==='settings'&&integrationTab==='ai'&&integrationDirty&&!confirm('Cấu hình AI có thay đổi chưa lưu. Rời trang và bỏ các thay đổi?'))return;
- integrationDirty=false;activeView=view;focusAgent=null;render();
+ if(activeView===view){setMobileMenu(false);return;}
+ if(activeView==='settings'&&integrationDirty&&!confirm('Cấu hình AI có thay đổi chưa lưu. Rời trang và bỏ các thay đổi?'))return;
+ integrationDirty=false;activeView=view;focusAgent=null;setMobileMenu(false);render();
  document.querySelector('#mainContent').scrollTo({top:0});if(view==='forum')loadForum()
  }
 function pageHead(eyebrow,title,desc,right=''){return `<div class="page-head"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${desc}</p></div><div class="view-actions">${right}</div></div>`}
@@ -525,22 +536,14 @@ function telegramSettingsSection(){
  <div class="tagline">Để tạo Bot: vào Telegram → tìm <strong>@BotFather</strong> → gửi /newbot. Bạn cần biết User ID dạng số của tài khoản được phép sử dụng.</div>
  </section>`;
 }
-let integrationTab='ai',integrationDirty=false;
+let integrationDirty=false;
 function markIntegrationDirty(){integrationDirty=true;const e=$('#aiUnsavedIndicator');if(e)e.textContent='● Có thay đổi chưa lưu';}
-function settingsTabSwitch(tab){
- if(tab===integrationTab)return;
- if(integrationDirty&&!confirm('Thiết lập AI chưa được lưu. Rời trang này và bỏ các thay đổi?'))return;
- integrationDirty=false;integrationTab=tab;render();
+function settingsView(){
+ return `${pageHead('⚙ AI PROVIDERS','Cài đặt <span class="gradient-text">Gemini / Groq / AI</span>',
+ 'Quản lý Gemini, Groq và mô hình cho các AI Agent · Không cần sửa file .env')}${aiSettingsSection()}`;
 }
-function settingsView(){return `${pageHead('⚙ LOCAL INTEGRATIONS','Cài đặt <span class="gradient-text">AI & Telegram</span>',
- 'Cài trực tiếp trên phần mềm · Không cần sửa file .env', '')}
- <div class="integration-tabs" role="tablist" aria-label="Nhóm cấu hình">
- <button type="button" role="tab" aria-selected="${integrationTab==='ai'}" class="${integrationTab==='ai'?'active':''}" onclick="settingsTabSwitch('ai')">✦ Gemini & các AI</button>
- <button type="button" role="tab" aria-selected="${integrationTab==='telegram'}" class="${integrationTab==='telegram'?'active':''}" onclick="settingsTabSwitch('telegram')">➤ Telegram Bot</button></div>
- ${integrationTab==='ai'?aiSettingsSection():`<div class="integration-telegram">${telegramSettingsSection()}</div>`}
- `;}
 function telegramView(){return `${pageHead('➤ TELEGRAM CONNECTOR','Telegram <span class="gradient-text">Bot</span>',
- 'Thiết lập và vận hành bot nhận ảnh ngay trong phần mềm.',eButton('⚙ Cài đặt cả ChatGPT','onclick="navigate(\'settings\')"'))}
+ 'Thiết lập và vận hành bot nhận ảnh ngay trong phần mềm.','')}
  <div class="two-cols">${telegramSettingsSection()}
  <section class="panel padded"><h3>Mẫu gửi ảnh sản phẩm</h3>
  <div class="note" style="white-space:pre-wrap">SKU=TRA-001
@@ -799,7 +802,14 @@ async function openProfile(id){if(!confirm(`Mở Chrome Profile ${id}? Hãy đă
 async function approveJob(id){if(!confirm(`Duyệt nhiệm vụ #${id}? Phải có ảnh, giá và tồn kho đã xác minh.`))return;try{await api('jobs/approve',{id});toast('Đã duyệt nhiệm vụ');await refresh()}catch(e){toast(e.message,true)}}
 async function rejectJob(id){if(!confirm(`Từ chối nhiệm vụ #${id}?`))return;try{await api('jobs/reject',{id});toast('Đã từ chối');await refresh()}catch(e){toast(e.message,true)}}
 function copyText(t){if(navigator.clipboard?.writeText)navigator.clipboard.writeText(t).then(()=>toast('Đã sao chép')).catch(()=>toast('Không thể sao chép',true));else toast('Trình duyệt chưa hỗ trợ sao chép',true)}
-$('#nav').addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)navigate(b.dataset.view)});$('#refreshBtn').addEventListener('click',refresh);$('#closeModal').addEventListener('click',closeModal);$('#modalBackdrop').addEventListener('click',e=>{if(e.target.id==='modalBackdrop')closeModal()});window.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+$('#nav').addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)navigate(b.dataset.view)});
+$('#mobileMenuButton').addEventListener('click',()=>setMobileMenu(!document.body.classList.contains('menu-open')));
+$('#sidebarBackdrop').addEventListener('click',()=>setMobileMenu(false));
+window.addEventListener('resize',()=>{if(window.innerWidth>920)setMobileMenu(false)});
+$('#refreshBtn').addEventListener('click',refresh);
+$('#closeModal').addEventListener('click',closeModal);
+$('#modalBackdrop').addEventListener('click',e=>{if(e.target.id==='modalBackdrop')closeModal()});
+window.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(document.body.classList.contains('menu-open'))setMobileMenu(false);else closeModal()});
 setInterval(()=>{if(['dom','missions','hq','shops'].includes(activeView)&&$('#modalBackdrop')?.hidden&&document.visibilityState==='visible')refresh()},9000);
 setInterval(()=>{if(activeView==='forum'&&document.visibilityState==='visible')loadForum()},6500);
 setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})},1000);
