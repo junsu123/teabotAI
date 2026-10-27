@@ -223,6 +223,8 @@ class Handler(BaseHTTPRequestHandler):
   path=urlparse(self.path).path
   if path=='/api/overview':return json_reply(self,overview())
   if path=='/api/health':return json_reply(self,{'ok':True,'date':utc(),'version':'0.4.0','ceo_worker':'enabled'})
+  if path=='/api/flow/profiles/reload-status':
+   return json_reply(self,flow_profiles.reload_status())
   if path=='/api/agent-forum':
    try:
     raw=parse_qs(urlparse(self.path).query).get('mission_id',[''])[0]
@@ -481,6 +483,12 @@ class Handler(BaseHTTPRequestHandler):
     return json_reply(self,flow_profiles.launch_for_job(DB,body.get('job_id')))
    if path=='/api/flow/profiles/check-credits':
     return json_reply(self,flow_profiles.request_credit_check(DB,body.get('email')))
+   if path=='/api/flow/profiles/reload-all':
+    return json_reply(self,flow_profiles.reload_all_credits(DB))
+   if path=='/api/flow/profiles/delete':
+    if body.get('confirm_delete') is not True:
+     raise ValueError('Cần xác nhận xóa vĩnh viễn Gmail và Chrome profile')
+    return json_reply(self,flow_profiles.delete_flow_profile(DB,body.get('email')))
    if path=='/api/flow/accounts/balance':
     return json_reply(self,flow_accounts.update_balance(DB,
          body.get('email'),body.get('balance'),body.get('profile_label')))
