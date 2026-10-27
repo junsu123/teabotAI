@@ -203,3 +203,23 @@ html,body{max-width:100%}
  .veo-sample-controls .video-card-actions button{width:100%}
  .veo-sample-preview>.video-work-top{align-items:stretch}
 }
+
+/* Flow account credits and per-scene reviewed handoff */
+.flow-accounts-panel,.flow-queue-panel{margin:16px 0}
+.flow-account-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:12px;margin-top:18px}
+.flow-account,.flow-job{border:1px solid #315c70;background:#102d40;border-radius:12px;padding:14px;min-width:0}
+.flow-balance{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:9px;margin:13px 0 7px}
+.flow-balance b{font-size:22px;color:#b5f1e1}
+.flow-balance span{font-size:11px;color:#a0bbc9}
+.flow-account .tagline,.flow-job .tagline{overflow-wrap:anywhere}
+.flow-account-inputs{display:grid;grid-template-columns:minmax(80px,0.8fr) minmax(125px,1.3fr) auto auto;gap:7px;margin-top:14px;align-items:center}
+.flow-account-inputs input{width:100%;min-width:0;padding:9px 8px}
+.flow-account-inputs button{white-space:nowrap}
+.flow-queue-panel .video-form-grid{margin:10px 0}
+.flow-job-list{display:grid;gap:11px;margin-top:19px}
+.flow-job details{border:1px solid #2c5266;border-radius:7px;margin:11px 0;padding:9px}
+.flow-job summary{cursor:pointer;color:#c4eee8;font-weight:650}
+.flow-prompt{font:12px/1.65 ui-monospace,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto}
+.flow-job .video-card-actions a.small-btn{display:inline-flex;align-items:center;text-decoration:none}
+@media(max-width:960px){.flow-account-inputs{grid-template-columns:repeat(2,minmax(0,1fr))}.flow-account-inputs button{width:100%}}
+@media(max-width:560px){.flow-account-inputs{grid-template-columns:1fr}.flow-balance b{font-size:19px}.flow-job .video-card-actions{flex-direction:column;align-items:stretch}.flow-job .video-card-actions>*{width:100%;justify-content:center}}
