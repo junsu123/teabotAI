@@ -127,18 +127,20 @@ def inspect_context(context):
     return None
 
 
-def register_verified(db_path, enrollment_id, email, credits):
+def register_verified(db_path, enrollment_id, email, credits, source='browser_dom'):
     """Atomically create Gmail/account/profile mapping only AFTER verified sign-in."""
     email = flow_accounts.normalize_email(email)
     if isinstance(credits, bool) or not isinstance(credits, int) or not 0 <= credits <= 1000000:
         raise ValueError("Điểm tín dụng Google Flow không hợp lệ")
+    if source not in ('browser_dom','manual'):
+        raise ValueError("Nguồn điểm không hợp lệ")
     when = flow_accounts.utcnow()
     with flow_accounts.connect(db_path) as c:
         if c.execute("SELECT 1 FROM flow_accounts WHERE email=?", (email,)).fetchone():
             raise ValueError("DUPLICATE_EMAIL")
         c.execute("""INSERT INTO flow_accounts
             (email,balance,balance_checked_at,balance_source,created_at,updated_at)
-            VALUES(?,?,?,'browser_dom',?,?)""", (email, credits, when, when, when))
+            VALUES(?,?,?,?,?,?)""", (email, credits, when, source, when, when))
         c.execute("""INSERT INTO flow_browser_profiles
             (email,profile_id,created_at,last_opened_at) VALUES(?,?,?,?)""",
             (email, enrollment_id, when, when))
@@ -195,7 +197,7 @@ def complete_manually(db_path, enrollment_id, email, credits, profiles_dir=None,
     email = flow_accounts.normalize_email(email)
     if isinstance(credits, bool) or not isinstance(credits, int) or not 0 <= credits <= 1000000:
         raise ValueError("Điểm phải là số nguyên không âm")
-    register_verified(db_path, enrollment_id, email, credits)
+    register_verified(db_path, enrollment_id, email, credits, source='manual')
     return save_status(enrollment_id, "completed",
                        "Đã lưu Gmail do bạn xác nhận và Chrome profile đã đăng nhập.",
                        email=email, credits=credits, records_dir=records)
