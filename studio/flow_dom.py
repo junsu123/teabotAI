@@ -41,7 +41,10 @@ class _FlowHtml(HTMLParser):
                             self.emails.add(flow_accounts.normalize_email(values[0]))
             except (ValueError,TypeError):
                 pass
-        self.depth+=1
+        # HTML void elements never receive a closing tag.
+        if tag not in ("area","base","br","col","embed","hr","img","input",
+                       "link","meta","param","source","track","wbr"):
+            self.depth+=1
         if self.credits_depth is None and any(
             x in cls for x in ("credits-count","credits-label","credits-info")
         ):
@@ -158,7 +161,7 @@ def devtools_port(folder):
 def wait_for_dom_account(chrome,folder,*,timeout_seconds=900,
                          polling_seconds=3,connect_wait_seconds=12,
                          sleep=time.sleep,clock=time.monotonic):
-    """Return (email, credits, owned_window_or_None) or None.
+    """Return (email, credits, owned_window_or_None, source) or None.
 
     If no Chrome CDP listener is available, return fast for UIA fallback.
     Never attach to a port supplied by the user or to another Chrome profile.
@@ -216,8 +219,8 @@ def wait_for_dom_account(chrome,folder,*,timeout_seconds=900,
             ui_stable=ui_stable+1 if ui_reading and ui_reading==ui_current else 1 if ui_reading else 0
             ui_current=ui_reading
             if stable>=2:
-                return reading[0],reading[1],windows[0] if windows else None
+                return reading[0],reading[1],windows[0] if windows else None,'browser_dom'
             if ui_stable>=2:
-                return ui_reading[0],ui_reading[1],ui_window
+                return ui_reading[0],ui_reading[1],ui_window,'browser_uia'
             sleep(polling_seconds)
     return None
