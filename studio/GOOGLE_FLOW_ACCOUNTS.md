@@ -141,3 +141,30 @@ Google có thể trả về `Couldn't sign you in` khi Playwright trực tiếp 
 **Lưu ý về độ tin cậy:** Windows UI Automation của Chrome có từ Chrome 138, nhưng **không bảo đảm mọi thành phần Google Flow đều được đưa vào cây trợ năng**. Chức năng này là best-effort, **không phải API chính thức của Google**. Chưa có kiểm thử đăng nhập trực tiếp trên máy Windows của bạn. Nếu phần mềm không đọc được số, hãy nhấn vào menu tài khoản để hiện thông tin và kiểm tra thư viện pywinauto đã được cài.
 
 **Các thao tác khác:** Nút Reload tín dụng của tài khoản có sẵn vẫn sử dụng luồng kiểm tra riêng và cần kiểm chứng thực tế; thay đổi này áp dụng cho **bước + Thêm tài khoản mới**. Toàn bộ dữ liệu Chrome vẫn lưu dưới `studio/data/flow_chrome_profiles/` và không tải lên GitHub.
+
+
+## Cập nhật: tự đọc HTML/DOM sau khi chủ đăng nhập (28/10/2026)
+
+Trước bản này, **+ Thêm tài khoản** dùng Windows UI Automation để nhìn các nhãn trên cửa sổ Chrome. Nó KHÔNG đọc HTML, nên thường không thấy đủ email và điểm khi giao diện Flow dùng JavaScript, dropdown hoặc vùng nội dung động.
+
+Bây giờ khi bấm **+ Thêm tài khoản**, ứng dụng mở một Chrome profile **riêng**, dùng cổng Chrome DevTools Protocol ngẫu nhiên trên máy (`--remote-debugging-port=0` chỉ ràng buộc địa chỉ `127.0.0.1`). Sau khi bạn đăng nhập thủ công, phần mềm có thể đọc **DOM HTML đã render bằng JavaScript** từ chính cửa sổ đó thông qua Playwright `connect_over_cdp`, mà không cần cài extension.
+
+- Chỉ kiểm tra các tab `https://labs.google` trên đúng Chrome profile vừa tạo.
+- Toàn bộ snapshot HTML được dùng tạm trong bộ nhớ chương trình để tách Gmail và số tín dụng; **không ghi HTML/cookie/OTP/token vào file, database, API hay log**.
+- Chỉ lưu Gmail và số tín dụng khi cả hai được tìm thấy rõ ràng và ổn định qua **hai lần kiểm tra**, tránh nhầm giá trị.
+- Sau khi database lưu thành công, phần mềm cố gắng đóng **duy nhất** cửa sổ Chrome vừa tạo. Nếu Windows không cho phép đóng an toàn, chủ phải đóng cửa sổ đó.
+- Nếu máy/chính sách doanh nghiệp không cho phép CDP, phần mềm tự quay về cách đọc chữ qua Windows UI Automation; nếu cả hai cách đều không đọc được, yêu cầu xác nhận thủ công.
+- Thao tác này không phải API chính thức của Google Flow: vị trí thông tin trong DOM có thể đổi sau khi Google cập nhật giao diện. Không dùng để vượt kiểm tra bảo mật, đăng nhập thay chủ hoặc né giới hạn.
+
+**Bảo mật:** Chrome đang bật cổng debugging chỉ trong lúc chủ thực hiện phiên đăng nhập và nó chỉ lắng nghe trên localhost. Không chuyển tiếp cổng debugging ra Internet, không chia sẻ quyền điều khiển máy tính với người khác. Các profile riêng nằm ở `studio/data/flow_chrome_profiles`; tránh đồng bộ hoặc đẩy thư mục đó lên Git.
+
+Nếu vừa cập nhật, hãy đóng phiên cũ rồi chạy:
+
+~~~powershell
+cd D:\APhanMem\teabotAI
+git pull origin main
+cd studio
+.\start_windows.bat
+~~~
+
+Mở `http://127.0.0.1:8765`, Ctrl+Shift+R, vào **Google Flow · Tài khoản & tín dụng** và chọn **+ Thêm tài khoản**. Đăng nhập Google bằng cửa sổ Chrome mở ra, chờ đọc HTML. Mở menu avatar của Flow nếu số điểm chưa xuất hiện.
