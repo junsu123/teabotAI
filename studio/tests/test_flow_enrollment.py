@@ -129,7 +129,7 @@ class FlowEnrollmentTests(unittest.TestCase):
         with (mock.patch.object(flow_enrollment.flow_profiles,"chrome_binary",
                                 return_value="C:/Chrome/chrome.exe"),
               mock.patch.object(flow_enrollment.subprocess,"Popen") as launch):
-            def simulate_extension():
+            def simulate_extension(timeout=None):
                 flow_enrollment.capture_from_extension(
                     self.db,eid,token,"owner@gmail.com",996,self.profiles,self.records)
                 return 0
