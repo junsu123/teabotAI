@@ -463,6 +463,15 @@ class Handler(BaseHTTPRequestHandler):
    if path=='/api/content/veo-template':
     result=commerce_content.save_template(DB,body.get('template',''))
     return json_reply(self,result)
+   if path=='/api/content/veo-template/sample':
+    if body.get('confirm_token_use') is not True:
+     raise ValueError('Vui lòng xác nhận việc gọi AI CEO để tạo kịch bản mẫu (có dùng token/quota).')
+    # Only the AI CEO receives this request. Never persist the preview
+    # over a saved prompt or a real product mission.
+    sample=commerce_content.create_sample_script(
+       body.get('product_name',''),body.get('ingredients',''),
+       body.get('template',''),ceo_chat)
+    return json_reply(self,sample)
    if path=='/api/missions':
     agent=sanitize(body.get('agent_id','ceo'),40)
     if agent!='ceo':raise ValueError('Chủ doanh nghiệp chỉ giao nhiệm vụ cho AI CEO')
