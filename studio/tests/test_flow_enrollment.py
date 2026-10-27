@@ -144,6 +144,29 @@ class FlowEnrollmentTests(unittest.TestCase):
         self.assertTrue((self.profiles/eid).is_dir())
         self.assertFalse((self.profiles/eid/flow_profiles.LOCK_NAME).exists())
 
+    def test_extension_closes_background_chrome_and_releases_profile_lock(self):
+        with mock.patch.object(flow_enrollment.subprocess,"Popen"):
+            eid=flow_enrollment.start(self.db,self.profiles,self.records)["enrollment_id"]
+        token=(self.profiles/eid/flow_profiles.LOCK_NAME).read_text(encoding="utf-8")
+        with (mock.patch.object(flow_enrollment.flow_profiles,"chrome_binary",
+                                return_value="C:/Chrome/chrome.exe"),
+              mock.patch.object(flow_enrollment.subprocess,"Popen") as launch):
+            tries=[0]
+            def simulated_wait(timeout):
+                tries[0]+=1
+                if tries[0]==1:
+                    flow_enrollment.capture_from_extension(
+                        self.db,eid,token,"owner@gmail.com",996,self.profiles,self.records)
+                    raise flow_enrollment.subprocess.TimeoutExpired("chrome",timeout)
+                if tries[0]==2:
+                    raise flow_enrollment.subprocess.TimeoutExpired("chrome",timeout)
+                return 0
+            launch.return_value.wait.side_effect=simulated_wait
+            flow_enrollment.worker(self.db,eid,token,self.profiles,self.records)
+            launch.return_value.terminate.assert_called_once()
+        self.assertFalse((self.profiles/eid/flow_profiles.LOCK_NAME).exists())
+        self.assertEqual(flow_enrollment.get_status(eid,self.records)["status"],"completed")
+
     def test_worker_preserves_profile_on_browser_close_without_extension(self):
         with mock.patch.object(flow_enrollment.subprocess,"Popen"):
             eid=flow_enrollment.start(self.db,self.profiles,self.records)["enrollment_id"]
