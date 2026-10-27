@@ -26,7 +26,32 @@ def credits_account_email(page):
     except (ValueError, TypeError):
         return None
     except Exception:
-        return None
+        # The credits panel is often initially hidden behind the avatar.
+        # Click only a visible account-menu button, never login controls.
+        for selector in (
+            "button[aria-label*='account' i]",
+            "button[aria-label*='profile' i]",
+            "button[aria-label*='tài khoản' i]",
+            "button:has(img[alt*='avatar' i])",
+        ):
+            try:
+                control = page.locator(selector).first
+                if control.is_visible():
+                    control.click(timeout=1250)
+                    break
+            except Exception:
+                continue
+        try:
+            href = page.locator("a.credits-link[href]").first.get_attribute(
+                "href", timeout=1200)
+            parsed = urlparse(href or "")
+            if parsed.scheme != "https" or parsed.hostname != "accounts.google.com":
+                return None
+            for key, values in parse_qs(parsed.query).items():
+                if key.lower() == "email" and len(values) == 1:
+                    return flow_accounts.normalize_email(values[0])
+        except Exception:
+            pass
     return None
 
 
