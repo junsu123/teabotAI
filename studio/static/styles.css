@@ -346,3 +346,10 @@ html,body{max-width:100%}
 .flow-mini.neutral{background:#485567;color:#eef4fc}
 .flow-ui .flow-row-actions{min-width:205px}
 .flow-ui .flow-credit small{font-size:10px;white-space:nowrap}
+
+/* Flow blank-profile enrollment progress, shown inside the existing Flow page. */
+.flow-enrollment-status{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;
+ margin:0 0 12px;padding:10px 12px;border:1px solid #2d786c;
+ border-radius:6px;background:#172e2e;color:#d8f5eb;font-size:12px}
+.flow-enrollment-status strong{color:#72e0bf}
+.flow-enrollment-status span{max-width:100%;overflow-wrap:anywhere}
