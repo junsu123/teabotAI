@@ -115,6 +115,7 @@ function zoom(by){sceneScale=Math.max(.65,Math.min(1.6,sceneScale+by));if($('#ma
 function agentsView(){return `${pageHead('♟ TEAM MANAGEMENT','Nhân viên <span class="gradient-text">AI</span>','Phòng ban chỉ nhận việc qua AI CEO; bạn không giao việc trực tiếp.',eButton('👑 Giao việc cho CEO','onclick="showMissionForm()"'))}<div class="agents-cards">${data.agents.map(a=>`<div class="agent-card" onclick="openAgent('${a.id}')"><div class="portrait" style="background:${a.color}22;border:1px solid ${a.color}66">${a.emoji}</div><h3>${a.name}</h3><p>${a.role}</p><div class="bottom"><span>● Cấu hình sẵn</span><span>Xem nhiệm vụ ↗</span></div></div>`).join('')}</div><div class="note" style="margin-top:20px">Các agent là những vai trò logic trong phần mềm. Để xử lý AI thực sự, bạn phải cài Ollama và cấu hình workflow trong mã nguồn Python; trạng thái này không có nghĩa AI đang chạy nền.</div>`}
 function flowView(){
  const accounts=data.flow_accounts||[],jobs=data.flow_jobs||[];
+ const profiles=data.flow_browser_profiles||{};
  const canQueue=(data.commerce_outputs||[]).filter(x=>x.status==='ready'&&x.veo_prompts);
  const statusMap={queued:'Chưa có tài khoản đủ điểm',assigned:'Đã phân tài khoản – chờ thao tác Flow',completed:'Người dùng xác nhận đã tạo',cancelled:'Đã hủy'};
  const activeCount=accounts.filter(a=>a.enabled).length;
@@ -126,12 +127,14 @@ function flowView(){
   const state=!a.enabled?'TẠM TẮT':!a.fresh?'CẦN CẬP NHẬT':'ĐÃ BẬT';
   const stateClass=!a.enabled?'off':!a.fresh?'stale':'on';
   const masked=flowMaskEmail(a.email);
+  const profile=profiles[a.email]||null;
+  const profileState=profile?.in_use?'Đang mở':profile?.status==='error'?'Lỗi mở Chrome':profile?'Đã tạo profile':'Chưa tạo profile';
   return `<tr data-email="${h(a.email)}">
     <td class="flow-index">${i+1}</td>
     <td><button class="flow-switch ${a.enabled?'is-on':''}" type="button" role="switch" aria-checked="${Boolean(a.enabled)}" aria-label="${a.enabled?'Tạm tắt':'Bật lại'} ${h(a.email)}" onclick="flowToggleAccount(this,${!a.enabled})"><span></span></button></td>
     <td><input aria-label="Tạo ảnh (chưa hỗ trợ thiết lập riêng)" title="Chưa có thiết lập quyền tạo ảnh riêng theo tài khoản" type="checkbox" disabled></td>
     <td><input aria-label="Tạo video (chưa hỗ trợ thiết lập riêng)" title="Chưa có thiết lập quyền tạo video riêng theo tài khoản" type="checkbox" disabled></td>
-    <td class="flow-email" title="${h(a.email)}">${h(masked)}</td>
+    <td class="flow-email" title="${h(a.email)}">${h(masked)}<small class="flow-profile-sub">${h(profileState)}${profile?' · '+h(profile.profile_id.slice(0,8)):''}</small></td>
     <td class="flow-plan" title="Chưa đồng bộ loại gói với Google Flow">—</td>
     <td class="flow-credit" title="Số dư bạn nhập thủ công; đã dành ${Number(a.reserved)||0} điểm"><strong>${h(balance)}</strong><small>Đã dành: ${Number(a.reserved)||0}</small></td>
     <td class="flow-proxy">—</td>
@@ -139,7 +142,7 @@ function flowView(){
     <td class="flow-row-actions">
       <button class="flow-mini green" type="button" aria-label="Cập nhật tín dụng của ${h(a.email)}" title="Nhập tín dụng mới / tên profile" onclick="flowEditCredit(this)">↻</button>
       <button class="flow-mini orange" type="button" title="Mở Kho Proxy (chưa gán trực tiếp vào Gmail Flow)" onclick="navigate('proxies')">Proxy</button>
-      <a class="flow-mini blue" href="https://labs.google/fx/tools/flow" target="_blank" rel="noopener noreferrer" aria-label="Mở Google Flow" title="Mở Google Flow">◎</a>
+      <button class="flow-mini blue" type="button" onclick="flowOpenProfile(this)" aria-label="Mở Flow bằng profile của ${h(a.email)}" title="Mở Chrome profile riêng cho Gmail này">◎</button>
       <button class="flow-mini red" type="button" disabled title="Chưa hỗ trợ xóa tài khoản qua backend" aria-label="Xóa tài khoản chưa được hỗ trợ">▤</button>
       <details class="flow-row-editor"><summary>Chỉnh tín dụng / nhãn Chrome</summary>
        <div class="flow-row-editor-form"><input class="flow-credit-input" type="number" min="0" max="1000000" step="1" placeholder="Tín dụng đã kiểm tra" aria-label="Tín dụng Flow" value="${a.balance===null?'':a.balance}">
@@ -159,7 +162,7 @@ function flowView(){
    <details><summary>Xem prompt cảnh ${scene}</summary><pre class="flow-prompt">${h(j.prompt)}</pre></details>
    <div class="video-card-actions">
     <button type="button" class="small-btn" onclick="flowCopyPrompt(${id})">Sao chép prompt</button>
-    <a class="small-btn" href="https://labs.google/fx/tools/flow" target="_blank" rel="noopener noreferrer">Mở Google Flow</a>
+    ${j.email?`<button type="button" class="small-btn" onclick="flowOpenJobProfile(${id})">Mở Flow đúng profile</button>`:`<button type="button" class="small-btn" disabled>Chưa phân Gmail</button>`}
     ${j.status==='assigned'?`<button type="button" class="small-btn" onclick="flowJobAction(${id},'complete')">Xác nhận video đã tạo</button>`:''}
     ${j.status!=='completed'&&j.status!=='cancelled'?`<button type="button" class="small-btn" onclick="flowJobAction(${id},'retry')">Phân lại</button>`:''}
    </div></article>`;
@@ -178,7 +181,7 @@ function flowView(){
    <div class="flow-add-cards">
     <div class="flow-add-card">
       <b>Đăng nhập trình duyệt</b>
-      <p class="flow-green-note small">Thêm Gmail tại đây; đăng nhập thực tế được thực hiện trên Google Flow.</p>
+      <p class="flow-green-note small">Mỗi Gmail tạo một Chrome profile riêng. Sau khi thêm một Gmail, Chrome sẽ mở để bạn đăng nhập thủ công. Lần sau vẫn dùng profile đó.</p>
       <div class="flow-card-buttons">
        <button class="flow-btn blue" type="button" onclick="flowShowAddForm(false)">＋ Thêm tài khoản</button>
        <button class="flow-btn purple" type="button" onclick="flowShowAddForm(true)">＋ Thêm theo danh sách</button>
@@ -196,7 +199,7 @@ function flowView(){
    <div class="flow-add-inline" id="flowAddForm" hidden>
     <label for="flowEmailList" id="flowAddLabel">Gmail muốn thêm</label>
     <textarea id="flowEmailList" rows="2" placeholder="flow01@gmail.com&#10;flow02@gmail.com"></textarea>
-    <div class="flow-form-actions"><button class="flow-btn blue" type="button" onclick="flowAddAccounts()">Lưu Gmail</button><button class="flow-btn outline" type="button" onclick="flowHideAddForm()">Đóng</button></div>
+    <div class="flow-form-actions"><button class="flow-btn blue" type="button" onclick="flowAddAccounts()">Tạo profile & mở Flow</button><button class="flow-btn outline" type="button" onclick="flowHideAddForm()">Đóng</button></div>
    </div>
   </div>
  </section>
@@ -220,7 +223,7 @@ function flowView(){
      <tbody>${rows||'<tr><td colspan="10" class="flow-empty">Chưa có Gmail. Chọn “Thêm tài khoản” ở khung phía trên.</td></tr>'}</tbody>
     </table>
    </div>
-   <p class="flow-disclaimer">Tín dụng được nhập thủ công, không phải số dư đang đồng bộ từ Google. Loại gói, quyền ảnh/video, cookie và gán proxy Flow chưa được hệ thống xác minh.</p>
+   <p class="flow-disclaimer">Profile Chrome riêng được lưu trên máy; không chia sẻ cookie giữa Gmail. Tín dụng vẫn nhập thủ công. Loại gói, quyền ảnh/video và proxy Flow chưa đồng bộ. Hãy sử dụng tài khoản được phép theo điều khoản của Google.</p>
   </div>
  </section>
  <details class="flow-queue-details">
@@ -280,8 +283,32 @@ async function flowRefreshAll(){
 }
 async function flowAddAccounts(){
  const mails=$('#flowEmailList')?.value||'';
- try{const r=await api('flow/accounts/add',{emails:mails});toast(r.message);await refresh()}
- catch(e){toast(e.message,true)}
+ try{
+  const result=await api('flow/accounts/add',{emails:mails});
+  toast(result.message);await refresh();
+  // Opening is user initiated by clicking Add/Save; bulk creation must not open 100 windows.
+  if(result.emails?.length===1)await flowOpenProfileEmail(result.emails[0]);
+  else toast('Đã tạo '+(result.profiles_ready||0)+' profile. Chọn nút ◎ của mỗi Gmail để đăng nhập.');
+ }catch(e){toast(e.message,true)}
+}
+async function flowOpenProfileEmail(email){
+ if(!email){toast('Chưa chọn Gmail Flow',true);return}
+ try{
+  const r=await api('flow/profiles/open',{email});
+  toast(r.message);
+  await refresh();
+ }catch(e){toast(e.message,true)}
+}
+async function flowOpenProfile(button){
+ const email=button.closest('[data-email]')?.dataset.email;
+ await flowOpenProfileEmail(email);
+}
+async function flowOpenJobProfile(id){
+ try{
+  const r=await api('flow/jobs/open-profile',{job_id:id});
+  toast('Cảnh #'+id+' dùng Gmail '+r.email+'. '+r.message);
+  await refresh();
+ }catch(e){toast(e.message,true)}
 }
 async function flowSaveCredit(button){
  const row=button.closest('[data-email]');
