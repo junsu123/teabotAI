@@ -116,7 +116,7 @@ function agentsView(){return `${pageHead('♟ TEAM MANAGEMENT','Nhân viên <spa
 let flowCurrentEnrollment=null;
 let flowEnrollmentStarting=false;
 const flowEnrollmentBusy = () => flowEnrollmentStarting ||
-  ['opening','signin_pending','verifying_uia','capturing'].includes(flowCurrentEnrollment?.status);
+  ['opening','signin_pending','verifying_dom','verifying_uia','capturing'].includes(flowCurrentEnrollment?.status);
 function flowSyncAddButton(){
  const button=document.querySelector('#flowAddAccountButton');
  if(!button)return;
@@ -142,7 +142,7 @@ function flowView(){
   const stateClass=!a.enabled?'off':!a.fresh?'stale':'on';
   const masked=flowMaskEmail(a.email);
   const profile=profiles[a.email]||null;
-  const profileState=profile?.status==='signin_pending'?'Đang chờ đăng nhập':profile?.status==='signin_verifying'?'Đang xác minh Gmail/điểm':profile?.status==='signin_wrong_account'?'Đăng nhập nhầm Gmail':profile?.status==='signin_captured'?'Đã nhận điểm, đang đóng':profile?.status==='signin_timeout'?'Chưa xác minh được':profile?.status==='signin_unmonitored'?'Không theo dõi được':profile?.status==='checking_credits'?'Đang đọc tín dụng':profile?.status==='credits_unavailable'?'Đọc điểm chưa thành công':profile?.status==='credits_updated'?'Đã lấy điểm từ Flow':profile?.in_use?'Đang mở Chrome':profile?.status==='error'?'Lỗi mở Chrome':profile?'Đã tạo profile':'Chưa tạo profile';
+  const profileState=profile?.status==='verifying_dom'?'Đang đọc HTML sau đăng nhập':profile?.status==='signin_pending'?'Đang chờ đăng nhập':profile?.status==='signin_verifying'?'Đang xác minh Gmail/điểm':profile?.status==='signin_wrong_account'?'Đăng nhập nhầm Gmail':profile?.status==='signin_captured'?'Đã nhận điểm, đang đóng':profile?.status==='signin_timeout'?'Chưa xác minh được':profile?.status==='signin_unmonitored'?'Không theo dõi được':profile?.status==='checking_credits'?'Đang đọc tín dụng':profile?.status==='credits_unavailable'?'Đọc điểm chưa thành công':profile?.status==='credits_updated'?'Đã lấy điểm từ Flow':profile?.in_use?'Đang mở Chrome':profile?.status==='error'?'Lỗi mở Chrome':profile?'Đã tạo profile':'Chưa tạo profile';
   return `<tr data-email="${h(a.email)}">
     <td class="flow-index">${i+1}</td>
     <td><button class="flow-switch ${a.enabled?'is-on':''}" type="button" role="switch" aria-checked="${Boolean(a.enabled)}" aria-label="${a.enabled?'Tạm tắt':'Bật lại'} ${h(a.email)}" onclick="flowToggleAccount(this,${!a.enabled})"><span></span></button></td>
