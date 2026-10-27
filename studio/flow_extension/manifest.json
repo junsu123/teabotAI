@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "TEA Mars – Flow Credit Reader",
+  "version": "1.0.0",
+  "description": "Chỉ đọc email và tín dụng đang hiển thị trên Flow, gửi tới Mars Studio cục bộ.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "pair.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://flow.google.com/*",
+        "https://labs.google/*"
+      ],
+      "js": [
+        "flow.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
