@@ -181,30 +181,6 @@ def capture_from_extension(db_path, enrollment_id, token, email, credits,
     return {"ok":True,"status":"completed","email":email,"credits":credits}
 
 
-def inspect_logged_in_profile(folder):
-    """Read-only inspection AFTER the ordinary Chrome sign-in window closes.
-
-    Google may refuse scripted browsers. Failure never deletes the login data
-    and never attempts another sign-in or bypasses account security.
-    """
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as pw:
-        context = pw.chromium.launch_persistent_context(
-            user_data_dir=str(folder), channel="chrome", headless=True,
-            accept_downloads=False, viewport={"width": 1400, "height": 900})
-        try:
-            page = context.pages[0] if context.pages else context.new_page()
-            page.goto(flow_profiles.FLOW_URL, wait_until="domcontentloaded", timeout=35000)
-            for _ in range(4):
-                account = inspect_context(context)
-                if account:
-                    return account
-                page.wait_for_timeout(1500)
-            return None
-        finally:
-            context.close()
-
-
 def complete_manually(db_path, enrollment_id, email, credits, profiles_dir=None,
                       records_dir=None):
     """Fallback only: after Chrome has CLOSED, owner confirms visible details."""
