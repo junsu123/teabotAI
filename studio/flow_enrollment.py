@@ -92,7 +92,7 @@ def register_verified(db_path, enrollment_id, email, credits, source="browser_ui
     email = flow_accounts.normalize_email(email)
     if type(credits) is not int or not 0 <= credits <= 1000000:
         raise ValueError("Điểm tín dụng Flow không hợp lệ")
-    if source not in ("browser_uia", "manual"):
+    if source not in ("browser_uia", "browser_dom", "manual"):
         raise ValueError("Nguồn tín dụng không hợp lệ")
     when = flow_accounts.utcnow()
     with flow_accounts.connect(db_path) as c:
@@ -159,7 +159,7 @@ def worker(db_path, enrollment_id, token, profiles_dir=None, records_dir=None,
                 chrome, folder, timeout_seconds=timeout_seconds)
         except (ImportError, OSError, RuntimeError, ValueError) as exc:
             monitor_error = type(exc).__name__
-        if discovered is None and chrome.poll() is None:
+        if discovered is None:
             # Chrome debugger may be disabled by enterprise policy.
             # Preserve the previous read-only UIA inspection as a fallback.
             try:
@@ -173,10 +173,11 @@ def worker(db_path, enrollment_id, token, profiles_dir=None, records_dir=None,
                 monitor_error = type(exc).__name__
 
         if discovered is not None:
-            email, credits, window = discovered
+            email, credits, window = discovered[:3]
+            source = discovered[3] if len(discovered)>3 else "browser_uia"
             try:
                 completed_email = register_verified(
-                    db_path, enrollment_id, email, credits, source="browser_uia")
+                    db_path, enrollment_id, email, credits, source=source)
                 save_status(enrollment_id, "capturing",
                             "Đã lưu Gmail và tín dụng. Đang đóng Chrome profile riêng.",
                             records_dir=records)
