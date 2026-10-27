@@ -330,3 +330,13 @@ html,body{max-width:100%}
  .flow-btn{font-size:11px}
  .flow-queue-details>summary span{float:none;display:block;margin:4px 0 0}
 }
+
+
+/* Isolated Chrome-profile indicators for the Flow account table. */
+.flow-accounts-table td.flow-email .flow-profile-sub{
+ display:block;color:#7ee0b9;font-size:10px;font-weight:500;
+ margin-top:3px;white-space:nowrap;
+}
+.flow-accounts-table .flow-email{min-width:175px}
+.flow-accounts-table .flow-mini.blue{cursor:pointer}
+.flow-ui .flow-add-card .flow-green-note.small{line-height:1.5}

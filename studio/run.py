@@ -32,6 +32,7 @@ import agent_forum
 import product_video_workflow
 import commerce_content
 import flow_accounts
+import flow_profiles
 import model_router
 import claude_provider
 import integration_settings
@@ -83,6 +84,7 @@ def init():
  ceo_engine.setup(DB)
  product_video_workflow.setup(DB)
  flow_accounts.setup(DB)
+ flow_profiles.setup(DB)
 
 def utc():return datetime.now().astimezone().isoformat(timespec='seconds')
 
@@ -183,6 +185,7 @@ def overview():
     'commerce_outputs':commerce_content.list_outputs(DB),
     'veo_template':commerce_content.template(DB),
     'flow_accounts':flow_accounts.list_accounts(DB),
+    'flow_browser_profiles':flow_profiles.list_profiles(DB),
     'flow_jobs':flow_accounts.list_jobs(DB),
     'learnings':list_learnings(), 'products':list_products(), 'proxies':proxy_store.all_proxies(), 'training':training_summary(),
     'ollama':ollama_health(),
@@ -465,7 +468,17 @@ class Handler(BaseHTTPRequestHandler):
     (TRAIN_DIR/(sid+'.stop')).touch()
     return json_reply(self,{'ok':True,'message':'Đã yêu cầu lưu và dừng phiên học'})
    if path=='/api/flow/accounts/add':
-    return json_reply(self,flow_accounts.add_accounts(DB,body.get('emails','')))
+    emails=body.get('emails','')
+    result=flow_accounts.add_accounts(DB,emails)
+    profiles=flow_profiles.ensure_many(DB,emails)
+    result['profiles_ready']=len(profiles)
+    result['emails']=[p['email'] for p in profiles]
+    result['message']='Đã lưu Gmail và tạo profile Chrome riêng cho từng tài khoản. Mở profile để đăng nhập Google thủ công.'
+    return json_reply(self,result)
+   if path=='/api/flow/profiles/open':
+    return json_reply(self,flow_profiles.launch_for_email(DB,body.get('email')))
+   if path=='/api/flow/jobs/open-profile':
+    return json_reply(self,flow_profiles.launch_for_job(DB,body.get('job_id')))
    if path=='/api/flow/accounts/balance':
     return json_reply(self,flow_accounts.update_balance(DB,
          body.get('email'),body.get('balance'),body.get('profile_label')))

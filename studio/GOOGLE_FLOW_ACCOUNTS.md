@@ -46,3 +46,26 @@ Hàng đợi lưu giá dự kiến theo bảng trên; không tự đọc giá hi
 - Không hứa tự tạo/tải video MP4 khi chưa có tích hợp tạo video chính thức.
 
 Nếu tương lai Google cung cấp API Flow được hỗ trợ hoặc bạn chọn API tạo video riêng có giấy phép (ví dụ Gemini API/Google enterprise), có thể nối backend vào hàng đợi. **Tín dụng của API đó không mặc nhiên dùng chung với tín dụng Flow giao diện web.**
+
+
+## Chrome profile riêng theo từng Gmail (cập nhật 27/10/2026)
+
+1. Tại màn Google Flow · Tài khoản & tín dụng, chọn **+ Thêm tài khoản**.
+2. Nhập một Gmail rồi nhấn **Tạo profile & mở Flow**.
+3. Phần mềm tạo thư mục profile riêng trong `studio/data/flow_chrome_profiles/<profile_id>/` và mở Google Chrome với `--user-data-dir` trỏ vào thư mục đó.
+4. Tự đăng nhập Google trong cửa sổ mới. Chrome lưu phiên trên máy; không cần nhập mật khẩu, cookie hoặc OTP trong Mars Studio.
+5. Lần sau bấm nút **◎** ở đúng dòng tài khoản để mở lại profile, không sử dụng Chrome mặc định.
+6. Thêm theo danh sách: mỗi Gmail có thư mục profile riêng, nhưng không tự mở hàng loạt cửa sổ.
+7. Các Gmail đã lưu trước đây được cấp profile khi cập nhật, giữ nguyên số dư và hàng đợi.
+8. Trong hàng đợi 5 prompt, nút **Mở Flow đúng profile** dùng Gmail đã phân công cho cảnh; cảnh chưa phân Gmail không thể mở profile.
+
+Liên kết lưu lâu dài: `flow_jobs.email` → `flow_browser_profiles.email` → `profile_id` → thư mục Chrome riêng. Hàm `flow_profiles.profile_for_job()` kiểm tra phân công trước khi trả về profile tương ứng. Tích hợp dữ liệu/video được cấp phép trong tương lai phải sử dụng chính liên kết này.
+
+### Bảo mật và giới hạn
+
+- **Đã làm:** tạo thư mục Chrome profile riêng, gắn với Gmail, mở đúng profile, giữ phiên cục bộ, chặn mở trùng profile trong ứng dụng.
+- **Chưa làm:** tự động đọc số dư tín dụng, xác minh đăng nhập Google, gửi prompt, render và tải MP4 bằng Google Flow. Các chức năng này cần tích hợp riêng được phép; hiện vẫn thao tác thủ công.
+- Chrome được mở trực tiếp trên máy bằng trình duyệt cài sẵn. Google có thể yêu cầu xác minh hoặc đăng nhập lại.
+- Mọi cookie/phiên đăng nhập của Chrome được bảo vệ như dữ liệu nhạy cảm. Dữ liệu nằm trong `studio/data/`, bị `.gitignore` loại trừ; không đưa profile lên GitHub/Telegram.
+- Nếu ứng dụng hoặc Chrome tắt đột ngột, file khóa `.flow_browser_in_use` có thể tồn tại. Chỉ xử lý file khóa khi đã đóng mọi cửa sổ Chrome tương ứng.
+- Chỉ dùng tài khoản bạn được phép sử dụng; profile riêng không đồng nghĩa có quyền vượt hạn mức hoặc dùng API không công khai.
