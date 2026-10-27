@@ -69,3 +69,14 @@ Liên kết lưu lâu dài: `flow_jobs.email` → `flow_browser_profiles.email` 
 - Mọi cookie/phiên đăng nhập của Chrome được bảo vệ như dữ liệu nhạy cảm. Dữ liệu nằm trong `studio/data/`, bị `.gitignore` loại trừ; không đưa profile lên GitHub/Telegram.
 - Nếu ứng dụng hoặc Chrome tắt đột ngột, file khóa `.flow_browser_in_use` có thể tồn tại. Chỉ xử lý file khóa khi đã đóng mọi cửa sổ Chrome tương ứng.
 - Chỉ dùng tài khoản bạn được phép sử dụng; profile riêng không đồng nghĩa có quyền vượt hạn mức hoặc dùng API không công khai.
+
+## Đọc tín dụng Flow từ chính Chrome profile (bổ sung 27/10/2026)
+
+- Sau khi đăng nhập trong Chrome profile riêng, hãy **đóng cửa sổ Chrome của tài khoản đó**. Mars Studio sẽ tự thử mở lại cùng profile ở chế độ đọc thông tin để kiểm tra phần tử chữ `span.credits-count` trên Google Flow (ví dụ `1.016 tín dụng Google Flow` được hiểu là 1016 điểm).
+- Có thể chủ động kiểm tra bằng nút **↻** tại dòng Gmail. **Phải đóng Chrome profile đó trước khi bấm ↻** để tránh hai tiến trình cùng sử dụng thư mục profile.
+- Nút **✎** dùng để nhập tín dụng thủ công và chỉnh nhãn Chrome. Nút làm mới tổng thể chỉ tải lại kết quả hiện có ở database.
+- Khi đọc được điểm, hệ thống lưu số nguyên, nguồn `browser_dom` và thời gian cập nhật trong SQLite `flow_accounts`. Phần mềm phân bổ video theo số dư này giống như số nhập thủ công.
+- Nếu Google chuyển đến trang đăng nhập, đổi bố cục, hoặc cần xác minh tài khoản, tính năng báo **Đọc điểm chưa thành công** và **không ghi đè số dư cũ**. Chủ tài khoản vẫn có thể nhập điểm thủ công.
+- Đọc thông tin giao diện là phương thức best-effort, không phải API kiểm tra điểm được Google chứng nhận. Giao diện hoặc chính sách Google thay đổi có thể làm mất khả năng kiểm tra.
+- **Cookie:** Chrome đã lưu cookie đăng nhập cục bộ trong thư mục profile. Phần mềm **không xuất, sao chép, in, gửi hay lưu thêm cookie** vào SQLite, JSON hoặc GitHub. Không cung cấp cookie hay OTP cho bất kỳ tiện ích/dịch vụ lạ nào.
+- Đảm bảo đăng nhập đúng Gmail ở từng profile; công cụ đọc chữ hiện chưa xác minh độc lập chủ sở hữu Gmail đang đăng nhập.

@@ -81,6 +81,53 @@ class FlowProfileTests(TestCase):
             with self.assertRaisesRegex(ValueError, "đang được sử dụng"):
                 flow_profiles.launch_for_email(self.db, "a@gmail.com", self.root)
 
+    def test_parse_localized_visible_credit_text(self):
+        for raw,expected in [
+            ("1.016 tín dụng Google Flow",1016),
+            ("1,016 Google Flow credits",1016),
+            ("50 tín dụng Google Flow",50),
+            ("0 credits",0),
+            ("1 016 tín dụng Google Flow",1016)
+        ]:
+            with self.subTest(raw=raw):
+                self.assertEqual(flow_profiles.parse_credit_text(raw), expected)
+        for raw in ("3.5 credits", "hello", "1.016 điểm không rõ nguồn", "-10 credits", "1000001 credits"):
+            with self.subTest(raw=raw):
+                with self.assertRaises(ValueError):
+                    flow_profiles.parse_credit_text(raw)
+
+    def test_visible_dom_reader_never_requires_cookie_access(self):
+        page = mock.Mock()
+        page.locator.return_value.first.inner_text.return_value = "1.016 tín dụng Google Flow"
+        self.assertEqual(flow_profiles.credit_from_dom(page), 1016)
+        page.locator.assert_called()
+        page.context.cookies.assert_not_called()
+        page.evaluate.assert_not_called()
+
+    def test_credit_check_uses_the_same_profile_and_enforces_lock(self):
+        flow_accounts.add_accounts(self.db, "a@gmail.com")
+        info=flow_profiles.ensure_profile(self.db, "a@gmail.com", self.root)
+        with mock.patch.object(flow_profiles.subprocess, "Popen") as spawned:
+            result=flow_profiles.request_credit_check(self.db, "a@gmail.com", self.root)
+            self.assertTrue(result["ok"])
+            cmd=spawned.call_args.args[0]
+            self.assertIn("credits-worker",cmd)
+            self.assertIn("a@gmail.com",cmd)
+            self.assertTrue((info["folder"]/flow_profiles.LOCK_NAME).is_file())
+            with self.assertRaisesRegex(ValueError, "đóng cửa sổ Chrome"):
+                flow_profiles.request_credit_check(self.db, "a@gmail.com", self.root)
+
+    def test_browser_credit_update_records_source_without_overwriting_profile(self):
+        flow_accounts.add_accounts(self.db,"a@gmail.com")
+        initial=flow_profiles.ensure_profile(self.db,"a@gmail.com",self.root)
+        flow_accounts.update_browser_balance(self.db,"a@gmail.com",1016)
+        a=flow_accounts.list_accounts(self.db)[0]
+        self.assertEqual(a["balance"],1016)
+        self.assertEqual(a["verified_by"],"browser_dom")
+        self.assertTrue(a["fresh"])
+        updated=flow_profiles.ensure_profile(self.db,"a@gmail.com",self.root)
+        self.assertEqual(initial["profile_id"],updated["profile_id"])
+
     def test_snapshot_does_not_expose_profile_folder_or_secrets(self):
         flow_accounts.add_accounts(self.db, "a@gmail.com")
         flow_profiles.ensure_profile(self.db, "a@gmail.com", self.root)

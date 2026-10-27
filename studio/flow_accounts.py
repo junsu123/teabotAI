@@ -110,6 +110,26 @@ def update_balance(db_path,email,balance,profile_label=None):
     return {"ok":True,"message":"Đã lưu số dư do bạn đọc từ giao diện Flow; không phải kết quả kiểm tra tự động."}
 
 
+def update_browser_balance(db_path, email, balance):
+    """Record read-only credit text from the user's own Flow profile.
+
+    Browser DOM readings are best effort, *not* the official Google credits API.
+    Existing pending reservations are reconciled exactly as for manual input.
+    """
+    email = normalize_email(email)
+    if isinstance(balance, bool) or not isinstance(balance, int) or not 0 <= balance <= 1000000:
+        raise ValueError("Tín dụng đọc từ Google Flow không hợp lệ")
+    with connect(db_path) as c:
+        if not c.execute("SELECT 1 FROM flow_accounts WHERE email=?", (email,)).fetchone():
+            raise ValueError("Gmail Flow chưa có trong database")
+        c.execute("""UPDATE flow_accounts SET balance=?,balance_checked_at=?,
+                 balance_source='browser_dom',updated_at=? WHERE email=?""",
+                 (balance,utcnow(),utcnow(),email))
+        _reconcile_locked(c)
+    return {"ok": True, "balance": balance, "source": "browser_dom",
+            "message": "Đã cập nhật tín dụng từ chữ hiển thị trong Google Flow."}
+
+
 def set_enabled(db_path,email,enabled):
     email=normalize_email(email)
     if not isinstance(enabled,bool):raise ValueError("Trạng thái không hợp lệ")
@@ -139,7 +159,7 @@ def _account_rows(c):
         row["reserved"]=reserved.get(row["email"],0)
         row["available"]=max(0,row["balance"]-row["reserved"]) if row["balance"] is not None else None
         row["eligible"]=bool(row["enabled"]) and row["fresh"] and row["available"] is not None
-        row["verified_by"]="manual" if row["balance_source"]=="manual" else "unknown"
+        row["verified_by"]={"manual":"manual","browser_dom":"browser_dom"}.get(row["balance_source"],"unknown")
         data.append(row)
     return data
 
