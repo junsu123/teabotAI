@@ -17,6 +17,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import threading
 from urllib.parse import urlparse
 import time
 from datetime import datetime, timezone
@@ -348,6 +349,154 @@ def credit_worker(db_path, email, token, profiles_dir=None):
         except OSError:
             pass
 
+
+
+# Reload is sequential to avoid opening many Chrome processes at once.
+# The only data read is the displayed credit label, not cookies or tokens.
+_RELOAD_LOCK = threading.Lock()
+_RELOAD_GUARD = threading.RLock()
+_RELOAD_STATE = {"running": False, "total": 0, "done": 0, "updated": 0,
+                 "failed": 0, "skipped": 0, "message": "Chưa làm mới",
+                 "started_at": None, "finished_at": None}
+_PROFILE_ACTION_LOCK = threading.RLock()
+
+
+def reload_status():
+    with _RELOAD_GUARD:
+        return dict(_RELOAD_STATE)
+
+
+def _reload_all_worker(db_path, emails, profiles_dir=None):
+    root = Path(profiles_dir) if profiles_dir is not None else PROFILES
+    try:
+        for email in emails:
+            outcome = "failed"
+            try:
+                info = ensure_profile(db_path, email, root)
+                folder = info["folder"]
+                lock = folder / LOCK_NAME
+                token = uuid4().hex
+                with _PROFILE_ACTION_LOCK:
+                    try:
+                        fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                    except FileExistsError:
+                        fd = None
+                    if fd is not None:
+                        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                            handle.write(token)
+                if fd is None:
+                    outcome = "skipped"  # Existing manual Chrome window stays untouched.
+                else:
+                    _write_status(folder, "checking_credits", "Reload đang đọc tín dụng Google Flow")
+                    # credit_worker closes the headless browser and releases the lock.
+                    credit_worker(db_path, email, token, root)
+                    status = list_profiles(db_path, root)[email]["status"]
+                    outcome = "updated" if status == "credits_updated" else "failed"
+            except Exception:
+                outcome = "failed"
+            with _RELOAD_GUARD:
+                _RELOAD_STATE["done"] += 1
+                _RELOAD_STATE[outcome] += 1
+                _RELOAD_STATE["message"] = (
+                    "Đã kiểm tra " + str(_RELOAD_STATE["done"]) + "/" +
+                    str(_RELOAD_STATE["total"]) + " tài khoản"
+                )
+    finally:
+        with _RELOAD_GUARD:
+            _RELOAD_STATE["running"] = False
+            _RELOAD_STATE["finished_at"] = now()
+            _RELOAD_STATE["message"] = (
+                "Hoàn tất: " + str(_RELOAD_STATE["updated"]) + " cập nhật, " +
+                str(_RELOAD_STATE["failed"]) + " lỗi, " +
+                str(_RELOAD_STATE["skipped"]) + " đang mở/bỏ qua."
+            )
+        _RELOAD_LOCK.release()
+
+
+def reload_all_credits(db_path, profiles_dir=None):
+    """On reload, sequentially reopen eligible Chrome profiles to read Flow credits.
+
+    Skip profiles already open in normal Chrome. Do not silently reuse another
+    Gmail, override verified balances on errors, or export browser cookies.
+    """
+    if not _RELOAD_LOCK.acquire(blocking=False):
+        return {"ok": True, "started": False, **reload_status()}
+    try:
+        with connect(db_path) as c:
+            emails = [r["email"] for r in c.execute(
+                "SELECT email FROM flow_accounts WHERE enabled=1 ORDER BY email")]
+        with _RELOAD_GUARD:
+            _RELOAD_STATE.update(running=bool(emails), total=len(emails), done=0,
+                                 updated=0, failed=0, skipped=0,
+                                 started_at=now(), finished_at=None,
+                                 message="Đang mở Chrome profile để đọc tín dụng")
+        if emails:
+            threading.Thread(
+                target=_reload_all_worker, args=(db_path, emails, profiles_dir),
+                daemon=True, name="Flow-Credit-Reload"
+            ).start()
+        else:
+            with _RELOAD_GUARD:
+                _RELOAD_STATE.update(message="Không có tài khoản Flow đang bật",
+                                     finished_at=now())
+            _RELOAD_LOCK.release()
+        return {"ok": True, "started": bool(emails), **reload_status()}
+    except Exception:
+        _RELOAD_LOCK.release()
+        raise
+
+
+def delete_flow_profile(db_path, email, profiles_dir=None):
+    """Remove Gmail and its private Chrome folder, preserving completed job logs.
+
+    Refuse deletion while the Chrome profile is in use. Move the directory to
+    a private quarantine name before database mutation; restore on DB failure.
+    """
+    email = flow_accounts.normalize_email(email)
+    root = (Path(profiles_dir) if profiles_dir is not None else PROFILES).resolve()
+    with _PROFILE_ACTION_LOCK:
+        with connect(db_path) as c:
+            account = c.execute("SELECT email FROM flow_accounts WHERE email=?",
+                                (email,)).fetchone()
+            profile = c.execute("SELECT profile_id FROM flow_browser_profiles WHERE email=?",
+                                (email,)).fetchone()
+        if account is None:
+            raise ValueError("Gmail Flow không tồn tại")
+        folder = None
+        quarantine = None
+        if profile is not None:
+            pid = profile["profile_id"]
+            if not ID_RE.fullmatch(pid):
+                raise ValueError("Mã profile Chrome không hợp lệ")
+            folder = root / pid
+            if folder.is_symlink():
+                raise ValueError("Không xóa được profile có đường dẫn liên kết")
+            if (folder / LOCK_NAME).exists():
+                raise ValueError("Hãy đóng Chrome profile trước khi xóa tài khoản")
+            if folder.exists():
+                quarantine = root / (".pending_delete_" + uuid4().hex)
+                folder.rename(quarantine)
+        try:
+            with connect(db_path) as c:
+                c.execute("""UPDATE flow_jobs SET status='queued',email=NULL,updated_at=?
+                             WHERE email=? AND status='assigned'""",
+                          (now(), email))
+                c.execute("DELETE FROM flow_browser_profiles WHERE email=?", (email,))
+                c.execute("DELETE FROM flow_accounts WHERE email=?", (email,))
+        except Exception:
+            if quarantine is not None and quarantine.exists():
+                quarantine.rename(folder)
+            raise
+    warning = ""
+    if quarantine is not None:
+        try:
+            shutil.rmtree(quarantine)
+        except OSError:
+            warning = ("Không xóa hết tệp Chrome; còn thư mục tạm tại " +
+                       quarantine.name + ". Hãy đóng mọi Chrome và xóa thủ công.")
+    flow_accounts.allocate(db_path)  # Reassign unfinished scenes only.
+    return {"ok": True, "deleted_email": email, "warning": warning,
+            "message": "Đã xóa Gmail và Chrome profile riêng."}
 
 def chrome_binary():
     """Use normal installed Google Chrome: manual login, no automation flags."""
