@@ -243,7 +243,7 @@ function videoRoomView(){
  const stages={research_pending:'Chờ nghiên cứu TikTok',research_complete:'Đã nghiên cứu',script_complete:'Đã soạn kịch bản',
  needs_review:'Chờ kiểm duyệt/chỉnh sửa',awaiting_video_render:'Đã có 5 prompt Veo 3',blocked:'Tạm dừng do lỗi'};
  return `${pageHead('▧ VIDEO WORKFLOW','Phòng <span class="gradient-text">SEO & Video AI</span>',
-  'Bộ nội dung theo sản phẩm: tiêu đề SEO, mô tả SEO, nghiên cứu giá, kịch bản 40 giây và 5 prompt Veo 3. Chưa tự render MP4.',
+  'Bộ nội dung theo sản phẩm: SEO, giá bán lẻ, kịch bản 40 giây và 5 prompt Veo 3. Sau khi duyệt, phân bổ từng cảnh trong mục Google Flow.',
   eButton('👑 Tạo bộ nội dung sản phẩm','onclick="showMissionForm()"'))}
  <div class="video-flow"><span>🔎 Giá & thị trường</span><b>→</b><span>🏷 SEO</span><b>→</b><span>🎞️ Kịch bản 40s</span><b>→</b><span>🛡️ Duyệt</span><b>→</b><span>🎬 5 × 8s Veo 3</span></div>
 
@@ -389,6 +389,7 @@ function showVideoRoomDetail(id){
  <button class="small-btn" onclick="copyCommerce(${id},'script_40s')">Sao chép kịch bản 40 giây</button>
  <details class="video-detail-section" open><summary>🎥 5 prompt Google Veo 3 · mỗi cảnh 8 giây</summary>
  ${sceneMarkup}</details>
+ <div class="video-card-actions"><button type="button" class="primary-btn" onclick="closeModal();navigate('flow')">🎬 Chuyển 5 prompt sang hàng đợi Google Flow</button></div>
  ${part('🔎 Nghiên cứu TikTok',v.research)}
  ${part('✍️ Kịch bản bán hàng',v.script)}
  ${part('🛡️ Kiểm duyệt',v.compliance)}
