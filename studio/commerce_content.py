@@ -138,6 +138,7 @@ def scene_instructions(base,product,ingredients):
     else:
         style="Chưa có prompt mẫu chủ cung cấp; tự tạo prompt chuyên nghiệp trung tính.\n"
     schema={"scenes":[{"scene":i,"duration_seconds":8,
+                      "action":"Hình ảnh và hành động trong cảnh "+str(i),
                       "veo_prompt":"Mô tả chi tiết cảnh số "+str(i),
                       "dialogue":"Lời thoại tiếng Việt nếu có"} for i in range(1,6)]}
     return (style+"Trả về duy nhất JSON theo cấu trúc, không có markdown:\n"+
