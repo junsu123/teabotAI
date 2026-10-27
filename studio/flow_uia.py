@@ -145,9 +145,21 @@ def wait_for_visible_account(chrome_process, *,
     deadline = clock() + timeout_seconds
     previous = None
     stable = 0
+    seen_own_window = False
+    missing_window_samples = 0
     while clock() < deadline and chrome_process.poll() is None:
         found = None
-        for window in owned_chrome_windows(chrome_process.pid, desktop_factory):
+        windows = owned_chrome_windows(chrome_process.pid, desktop_factory)
+        if windows:
+            seen_own_window = True
+            missing_window_samples = 0
+        elif seen_own_window:
+            missing_window_samples += 1
+            if missing_window_samples >= 3:
+                # The owner closed the Chrome window; background process may
+                # remain alive. Do not keep waiting the full login timeout.
+                return None
+        for window in windows:
             values = extract_account(visible_text_labels(window))
             if values:
                 found = (values, window)
