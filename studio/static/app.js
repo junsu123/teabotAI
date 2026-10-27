@@ -116,69 +116,167 @@ function agentsView(){return `${pageHead('♟ TEAM MANAGEMENT','Nhân viên <spa
 function flowView(){
  const accounts=data.flow_accounts||[],jobs=data.flow_jobs||[];
  const canQueue=(data.commerce_outputs||[]).filter(x=>x.status==='ready'&&x.veo_prompts);
- const statusMap={queued:'Chưa có tài khoản đủ điểm',assigned:'Đã phân tài khoản – chờ thao tác Flow',
-  completed:'Người dùng xác nhận đã tạo',cancelled:'Đã hủy'};
- let accountsHtml=accounts.map(a=>{
-  const bal=a.balance===null?'Chưa kiểm tra':a.balance+' điểm';
-  const verified=a.fresh?'Đã nhập gần đây':'Cần kiểm tra lại trên Flow';
-  return '<article class="flow-account" data-email="'+h(a.email)+'">'+
-   '<div class="video-work-top"><div><strong>'+h(a.email)+'</strong>'+
-   '<div class="tagline">'+h(a.profile_label||'Chưa đặt nhãn profile')+'</div></div>'+
-   '<span class="video-stage">'+(a.enabled?'Đang dùng':'Tạm tắt')+'</span></div>'+
-   '<div class="flow-balance"><b>'+h(bal)+'</b><span>Đã dành: '+a.reserved+
-   ' · Có thể dùng: '+(a.available===null?'?':a.available)+'</span></div>'+
-   '<div class="tagline">'+h(verified)+' · lần nhập: '+h(a.balance_checked_at||'Chưa có')+
-   ' · nguồn: '+h(a.verified_by||'thủ công')+'</div>'+
-   '<div class="flow-account-inputs"><input type="number" class="flow-credit-input" min="0" max="1000000" step="1" placeholder="Điểm Flow thực tế" aria-label="Nhập điểm Flow còn lại" value="'+(a.balance===null?'':a.balance)+'">'+
-   '<input type="text" class="flow-profile-input" maxlength="100" placeholder="Nhãn Chrome profile (không phải mật khẩu)" value="'+h(a.profile_label)+'">'+
-   '<button class="small-btn" type="button" onclick="flowSaveCredit(this)">Lưu điểm</button>'+
-   '<button class="small-btn" type="button" onclick="flowToggleAccount(this,'+(!a.enabled)+')">'+
-   (a.enabled?'Tạm ngưng':'Bật lại')+'</button></div></article>';
+ const statusMap={queued:'Chưa có tài khoản đủ điểm',assigned:'Đã phân tài khoản – chờ thao tác Flow',completed:'Người dùng xác nhận đã tạo',cancelled:'Đã hủy'};
+ const activeCount=accounts.filter(a=>a.enabled).length;
+ const totalCredit=accounts.reduce((s,a)=>s+(Number.isFinite(a.balance)?a.balance:0),0);
+ const proxies=data.proxies||[];
+ const proxyOptions=proxies.map(p=>`<option value="${h(p.id)}">${h(p.name||p.id)} · ${h(p.host||'')} : ${h(p.port||'')}</option>`).join('');
+ const rows=accounts.map((a,i)=>{
+  const balance=a.balance===null?'—':Number(a.balance).toLocaleString('vi-VN');
+  const state=!a.enabled?'TẠM TẮT':!a.fresh?'CẦN CẬP NHẬT':'ĐÃ BẬT';
+  const stateClass=!a.enabled?'off':!a.fresh?'stale':'on';
+  const masked=flowMaskEmail(a.email);
+  return `<tr data-email="${h(a.email)}">
+    <td class="flow-index">${i+1}</td>
+    <td><button class="flow-switch ${a.enabled?'is-on':''}" type="button" role="switch" aria-checked="${Boolean(a.enabled)}" aria-label="${a.enabled?'Tạm tắt':'Bật lại'} ${h(a.email)}" onclick="flowToggleAccount(this,${!a.enabled})"><span></span></button></td>
+    <td><input aria-label="Tạo ảnh (chưa hỗ trợ thiết lập riêng)" title="Chưa có thiết lập quyền tạo ảnh riêng theo tài khoản" type="checkbox" disabled></td>
+    <td><input aria-label="Tạo video (chưa hỗ trợ thiết lập riêng)" title="Chưa có thiết lập quyền tạo video riêng theo tài khoản" type="checkbox" disabled></td>
+    <td class="flow-email" title="${h(a.email)}">${h(masked)}</td>
+    <td class="flow-plan" title="Chưa đồng bộ loại gói với Google Flow">—</td>
+    <td class="flow-credit" title="Số dư bạn nhập thủ công; đã dành ${Number(a.reserved)||0} điểm"><strong>${h(balance)}</strong><small>Đã dành: ${Number(a.reserved)||0}</small></td>
+    <td class="flow-proxy">—</td>
+    <td><span class="flow-state ${stateClass}">${state}</span></td>
+    <td class="flow-row-actions">
+      <button class="flow-mini green" type="button" aria-label="Cập nhật tín dụng của ${h(a.email)}" title="Nhập tín dụng mới / tên profile" onclick="flowEditCredit(this)">↻</button>
+      <button class="flow-mini orange" type="button" title="Mở Kho Proxy (chưa gán trực tiếp vào Gmail Flow)" onclick="navigate('proxies')">Proxy</button>
+      <a class="flow-mini blue" href="https://labs.google/fx/tools/flow" target="_blank" rel="noopener noreferrer" aria-label="Mở Google Flow" title="Mở Google Flow">◎</a>
+      <button class="flow-mini red" type="button" disabled title="Chưa hỗ trợ xóa tài khoản qua backend" aria-label="Xóa tài khoản chưa được hỗ trợ">▤</button>
+      <details class="flow-row-editor"><summary>Chỉnh tín dụng / nhãn Chrome</summary>
+       <div class="flow-row-editor-form"><input class="flow-credit-input" type="number" min="0" max="1000000" step="1" placeholder="Tín dụng đã kiểm tra" aria-label="Tín dụng Flow" value="${a.balance===null?'':a.balance}">
+       <input class="flow-profile-input" type="text" maxlength="100" placeholder="Nhãn Chrome profile" aria-label="Nhãn profile" value="${h(a.profile_label||'')}">
+       <button type="button" class="flow-btn blue" onclick="flowSaveCredit(this)">Lưu điểm</button></div>
+       <small>Chỉ nhập số điểm bạn đã kiểm tra tại Flow. Không tự đồng bộ với Google.</small>
+      </details>
+    </td></tr>`;
  }).join('');
- let jobsHtml=jobs.map(j=>{
+ const jobsHtml=jobs.map(j=>{
   const scene=Number(j.scene),id=Number(j.id);
-  return '<article class="flow-job"><div class="video-work-top"><div>'+
-   '<strong>Video '+id+' · Nhiệm vụ #'+j.mission_id+' · Cảnh '+scene+'/5</strong>'+
-   '<div class="tagline">'+h(j.model)+' · chi phí dự kiến '+j.credit_cost+' điểm/lượt tạo</div></div>'+
-   '<span class="video-stage">'+h(statusMap[j.status]||j.status)+'</span></div>'+
-   '<div class="tagline">Tài khoản dự kiến: <b>'+h(j.email||'Chưa chọn được')+'</b></div>'+
-   '<details><summary>Xem prompt cảnh '+scene+'</summary><pre class="flow-prompt">'+h(j.prompt)+'</pre></details>'+
-   '<div class="video-card-actions">'+
-   '<button class="small-btn" type="button" onclick="flowCopyPrompt('+id+')">Sao chép prompt</button>'+
-   '<a class="small-btn" href="https://labs.google/fx/tools/flow" target="_blank" rel="noopener noreferrer">Mở Google Flow</a>'+
-   (j.status==='assigned'?'<button class="small-btn" type="button" onclick="flowJobAction('+id+',\'complete\')">Xác nhận video đã tạo</button>':'')+
-   (j.status!=='completed'&&j.status!=='cancelled'?'<button class="small-btn" type="button" onclick="flowJobAction('+id+',\'retry\')">Phân lại</button>':'')+
-   '</div></article>';
+  return `<article class="flow-job"><div class="video-work-top"><div>
+   <strong>Video ${id} · Nhiệm vụ #${h(j.mission_id)} · Cảnh ${scene}/5</strong>
+   <div class="tagline">${h(j.model)} · ${h(j.credit_cost)} điểm dự kiến/video</div></div>
+   <span class="video-stage">${h(statusMap[j.status]||j.status)}</span></div>
+   <div class="tagline">Tài khoản được phân: <b>${h(j.email||'Chưa có')}</b></div>
+   <details><summary>Xem prompt cảnh ${scene}</summary><pre class="flow-prompt">${h(j.prompt)}</pre></details>
+   <div class="video-card-actions">
+    <button type="button" class="small-btn" onclick="flowCopyPrompt(${id})">Sao chép prompt</button>
+    <a class="small-btn" href="https://labs.google/fx/tools/flow" target="_blank" rel="noopener noreferrer">Mở Google Flow</a>
+    ${j.status==='assigned'?`<button type="button" class="small-btn" onclick="flowJobAction(${id},'complete')">Xác nhận video đã tạo</button>`:''}
+    ${j.status!=='completed'&&j.status!=='cancelled'?`<button type="button" class="small-btn" onclick="flowJobAction(${id},'retry')">Phân lại</button>`:''}
+   </div></article>`;
  }).join('');
- return pageHead('🎬 GOOGLE FLOW',
-    'Tài khoản <span class="gradient-text">Flow & tín dụng</span>',
-    'Nhập Gmail, xác nhận tín dụng và phân 5 prompt video qua những tài khoản đủ điểm.',
-    eButton('➕ Nhập danh sách Gmail','onclick="flowFocusAdd()"'))+
- '<div class="note">Google Flow chưa công bố API kiểm tra số dư/tự gửi video được hỗ trợ ở đây. Bạn phải đăng nhập và xem số điểm trên Flow, sau đó nhập vào phần mềm. Phân bổ tài khoản là tự động theo điểm đã nhập; tạo video vẫn cần thao tác trong Flow. Không nhập mật khẩu, cookies hay OTP.</div>'+
- '<section class="panel padded flow-accounts-panel"><h3>1. Danh sách tài khoản Google Flow</h3>'+
- '<div class="field"><label for="flowEmailList">Gmail (mỗi dòng một địa chỉ, tối đa 100)</label>'+
- '<textarea id="flowEmailList" rows="3" placeholder="flow01@gmail.com&#10;flow02@gmail.com"></textarea></div>'+
- '<div class="video-card-actions"><button class="primary-btn" type="button" onclick="flowAddAccounts()">Thêm Gmail vào database</button>'+
- '<a class="small-btn" target="_blank" rel="noopener noreferrer" href="https://labs.google/fx/tools/flow">Mở Flow để xem điểm</a></div>'+
- '<div class="tagline">Trên Flow nhấn ảnh đại diện góc trên phải để xem số điểm còn lại. Hãy nhập số vừa kiểm tra cho từng tài khoản.</div>'+
- '<div class="flow-account-grid">'+(accountsHtml||empty('✉️','Chưa có Gmail','Thêm email trước khi phân bổ video.'))+'</div></section>'+
- '<section class="panel padded flow-queue-panel"><h3>2. Phân bổ 5 prompt Veo 3</h3>'+
- '<div class="video-form-grid"><div class="field"><label for="flowMissionSelect">Bộ prompt đã hoàn thành và kiểm duyệt</label>'+
- '<select id="flowMissionSelect">'+canQueue.map(x=>'<option value="'+x.mission_id+'">'+
-  h('#'+x.mission_id+' · '+x.product_name)+'</option>').join('')+'</select></div>'+
- '<div class="field"><label for="flowModelSelect">Chế độ Flow / số điểm mỗi video</label>'+
- '<select id="flowModelSelect"><option value="veo3.1-lite">Veo 3.1 Lite – 10 điểm*</option>'+
- '<option value="veo3.1-fast">Veo 3.1 Fast – 20 điểm*</option>'+
- '<option value="veo3.1-quality">Veo 3.1 Quality – 100 điểm*</option></select></div></div>'+
- '<div class="video-card-actions"><button type="button" class="primary-btn" onclick="flowQueueMission()">Tạo hàng đợi 5 cảnh</button>'+
- '<button type="button" class="small-btn" onclick="flowAllocate()">Phân bổ lại tài khoản đủ điểm</button></div>'+
- '<div class="tagline">*Chi phí tham khảo cho người dùng không thuộc Ultra, mỗi lần tạo một video; Google có thể thay đổi theo gói và lựa chọn trong Flow. Phải xác nhận chi phí hiện tại trên Flow.</div>'+
- '<div class="flow-job-list">'+(jobsHtml||empty('🎞','Chưa có hàng đợi','Tạo 5 prompt đã kiểm duyệt từ Xưởng SEO & Video AI.'))+'</div></section>'+
- '<div class="note">Chỉ bấm “Xác nhận video đã tạo” sau khi Flow thực sự hoàn tất. Phần mềm sẽ trừ lượng điểm dự kiến khỏi số dư do bạn đã nhập. Đây là sổ theo dõi thủ công, không phải số dư đồng bộ trực tiếp từ Google. Khi tài khoản hết điểm, các cảnh chưa bắt đầu sẽ được phân lại sang Gmail khác đủ điểm nếu có.</div>';
+ return `<div class="flow-ui">
+ <section class="flow-surface">
+  <header class="flow-section-header">↧ &nbsp; Thêm tài khoản mới</header>
+  <div class="flow-pad">
+   <p class="flow-green-note">Thêm tài khoản Flow để bắt đầu. Gmail Free / Pro / Ultra có giới hạn khác nhau. Bạn có thể quản lý nhiều Gmail trong cùng một danh sách.</p>
+   <div class="flow-proxy-bar">
+    <label for="flowProxySelect">Proxy cho tài khoản (tùy chọn):</label>
+    <select id="flowProxySelect" ${proxies.length?'':'disabled'}><option value="">Chọn proxy có sẵn</option>${proxyOptions}</select>
+    <input type="text" disabled value="Chỉ kiểm tra proxy, chưa gán với Gmail Flow" aria-label="Ghi chú proxy">
+    <button class="flow-btn blue" type="button" ${proxies.length?'':'disabled'} onclick="flowTestExistingProxy()">Kiểm tra Proxy</button>
+   </div>
+   <div class="flow-add-cards">
+    <div class="flow-add-card">
+      <b>Đăng nhập trình duyệt</b>
+      <p class="flow-green-note small">Thêm Gmail tại đây; đăng nhập thực tế được thực hiện trên Google Flow.</p>
+      <div class="flow-card-buttons">
+       <button class="flow-btn blue" type="button" onclick="flowShowAddForm(false)">＋ Thêm tài khoản</button>
+       <button class="flow-btn purple" type="button" onclick="flowShowAddForm(true)">＋ Thêm theo danh sách</button>
+       <button class="flow-btn outline" type="button" onclick="flowBackupAccounts()">Sao lưu</button>
+       <button class="flow-btn outline" type="button" onclick="flowRefreshAll()">Nạp lại</button>
+      </div>
+    </div>
+    <div class="flow-add-card">
+      <b>Nhập Cookie thủ công</b>
+      <p>Không nhập cookie, mật khẩu hay OTP vào phần mềm. Hiện chưa hỗ trợ xác thực bằng cookie.</p>
+      <input type="text" disabled placeholder="Dán chuỗi cookie vào đây..." aria-label="Nhập cookie chưa được hỗ trợ">
+      <button class="flow-btn orange wide" type="button" disabled title="Không có backend xác thực cookie">＋ Thêm bằng Cookie (chưa hỗ trợ)</button>
+    </div>
+   </div>
+   <div class="flow-add-inline" id="flowAddForm" hidden>
+    <label for="flowEmailList" id="flowAddLabel">Gmail muốn thêm</label>
+    <textarea id="flowEmailList" rows="2" placeholder="flow01@gmail.com&#10;flow02@gmail.com"></textarea>
+    <div class="flow-form-actions"><button class="flow-btn blue" type="button" onclick="flowAddAccounts()">Lưu Gmail</button><button class="flow-btn outline" type="button" onclick="flowHideAddForm()">Đóng</button></div>
+   </div>
+  </div>
+ </section>
+ <section class="flow-surface">
+  <header class="flow-section-header flow-header-between"><span>⚙ &nbsp; Tài khoản Flow</span><strong>Đang bật: ${activeCount} tài khoản | Tổng tín dụng đã nhập: ${totalCredit.toLocaleString('vi-VN')}</strong></header>
+  <div class="flow-pad">
+   <div class="flow-toolbar">
+    <strong>Bật tất cả:</strong>
+    <button class="flow-btn green" type="button" onclick="flowToggleAll(true)">Bật</button>
+    <button class="flow-btn outline" type="button" onclick="flowToggleAll(false)">Tắt</button>
+    <label title="Chưa hỗ trợ thiết lập quyền tạo ảnh riêng"><input type="checkbox" disabled> Ảnh</label>
+    <label title="Chưa hỗ trợ thiết lập quyền tạo video riêng"><input type="checkbox" disabled> Video</label>
+    <label class="flow-unsupported" title="Chưa có tính năng tự tắt theo hạn mức Flow"><input type="checkbox" role="switch" disabled> Tự động tắt tài khoản bị hết giới hạn</label>
+    <span class="flow-toolbar-space"></span>
+    <span class="flow-ready-note">${accounts.length?'Đã có tài khoản. Có thể phân bổ prompt sau khi nhập tín dụng.':'Chưa có tài khoản. Hãy thêm Gmail phía trên.'}</span>
+    <button class="flow-btn green" type="button" onclick="flowRefreshAll()">Làm mới tất cả</button>
+   </div>
+   <div class="flow-table-scroll" role="region" aria-label="Danh sách tài khoản Google Flow" tabindex="0">
+    <table class="flow-accounts-table">
+     <thead><tr><th scope="col">#</th><th scope="col">TẮT/BẬT</th><th scope="col">Ảnh</th><th scope="col">Video</th><th scope="col">Tài khoản</th><th scope="col">Loại</th><th scope="col">Tín dụng</th><th scope="col">Proxy</th><th scope="col">Trạng thái</th><th scope="col">Hành động</th></tr></thead>
+     <tbody>${rows||'<tr><td colspan="10" class="flow-empty">Chưa có Gmail. Chọn “Thêm tài khoản” ở khung phía trên.</td></tr>'}</tbody>
+    </table>
+   </div>
+   <p class="flow-disclaimer">Tín dụng được nhập thủ công, không phải số dư đang đồng bộ từ Google. Loại gói, quyền ảnh/video, cookie và gán proxy Flow chưa được hệ thống xác minh.</p>
+  </div>
+ </section>
+ <details class="flow-queue-details">
+  <summary>🎞 &nbsp; Hàng đợi 5 prompt Veo 3 <span>${jobs.length} cảnh · Nhấn để mở</span></summary>
+  <div class="flow-pad">
+   <div class="video-form-grid"><div class="field"><label for="flowMissionSelect">Bộ prompt đã hoàn thành và kiểm duyệt</label>
+    <select id="flowMissionSelect">${canQueue.map(x=>`<option value="${x.mission_id}">${h('#'+x.mission_id+' · '+x.product_name)}</option>`).join('')}</select></div>
+    <div class="field"><label for="flowModelSelect">Chế độ Flow / điểm dự kiến mỗi video</label>
+    <select id="flowModelSelect"><option value="veo3.1-lite">Veo 3.1 Lite – 10 điểm*</option><option value="veo3.1-fast">Veo 3.1 Fast – 20 điểm*</option><option value="veo3.1-quality">Veo 3.1 Quality – 100 điểm*</option></select></div></div>
+   <div class="video-card-actions"><button type="button" class="flow-btn blue" onclick="flowQueueMission()">Tạo hàng đợi 5 cảnh</button><button type="button" class="flow-btn outline" onclick="flowAllocate()">Phân bổ lại</button></div>
+   <p class="flow-disclaimer">*Chi phí chỉ là ước tính. Kiểm tra chi phí và số dư thực tế trên Google Flow trước khi tạo video.</p>
+   <div class="flow-job-list">${jobsHtml||empty('🎞','Chưa có hàng đợi','Tạo 5 prompt đã kiểm duyệt từ Xưởng SEO & Video AI.')}</div>
+  </div>
+ </details>
+ </div>`;
 }
-function flowFocusAdd(){
- const input=$('#flowEmailList');
- if(input){input.focus();input.scrollIntoView({behavior:'smooth',block:'center'})}
+function flowMaskEmail(email){
+ const parts=String(email||'').split('@');
+ if(parts.length!==2)return String(email||'');
+ const s=parts[0];return s.length<=3?s[0]+'****@'+parts[1]:s.slice(0,4)+'****@'+parts[1];
+}
+function flowShowAddForm(bulk){
+ const area=$('#flowAddForm'),field=$('#flowEmailList'),label=$('#flowAddLabel');
+ if(!area||!field)return;
+ area.hidden=false;field.rows=bulk?4:2;
+ field.placeholder=bulk?'flow01@gmail.com\nflow02@gmail.com':'flow01@gmail.com';
+ label.textContent=bulk?'Dán danh sách Gmail (mỗi dòng một địa chỉ)':'Thêm một địa chỉ Gmail';
+ field.scrollIntoView({block:'nearest',behavior:'smooth'});field.focus();
+}
+function flowHideAddForm(){const x=$('#flowAddForm');if(x)x.hidden=true}
+function flowFocusAdd(){flowShowAddForm(true)}
+function flowEditCredit(button){
+ const details=button.closest('tr')?.querySelector('.flow-row-editor');
+ if(details){details.open=true;details.querySelector('input')?.focus()}
+}
+async function flowToggleAll(enabled){
+ const accounts=(data.flow_accounts||[]).filter(a=>Boolean(a.enabled)!==enabled);
+ if(!accounts.length){toast('Không có tài khoản nào cần đổi trạng thái');return}
+ if(!confirm((enabled?'Bật':'Tắt')+' '+accounts.length+' tài khoản Flow trong danh sách?'))return;
+ try{for(const a of accounts)await api('flow/accounts/enabled',{email:a.email,enabled});toast('Đã cập nhật '+accounts.length+' tài khoản');await refresh()}
+ catch(e){toast('Một số tài khoản có thể chưa cập nhật: '+e.message,true);await refresh()}
+}
+function flowBackupAccounts(){
+ const accounts=(data.flow_accounts||[]).map(a=>({email:a.email,profile_label:a.profile_label||'',balance:a.balance,balance_checked_at:a.balance_checked_at,enabled:Boolean(a.enabled)}));
+ const blob=new Blob([JSON.stringify({exported_at:new Date().toISOString(),note:'Sao lưu danh sách và tín dụng nhập thủ công; không chứa mật khẩu/cookie.',accounts},null,2)],{type:'application/json;charset=utf-8'});
+ const url=URL.createObjectURL(blob),link=document.createElement('a');
+ link.href=url;link.download='flow-accounts-backup.json';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+ toast('Đã tải bản sao lưu JSON danh sách Gmail. Không chứa mật khẩu hoặc cookie.');
+}
+async function flowTestExistingProxy(){
+ const id=$('#flowProxySelect')?.value;if(!id){toast('Hãy chọn một proxy đã lưu trong Kho Proxy',true);return}
+ try{const r=await api('proxies/test',{id});toast(r.message,!r.reachable)}
+ catch(e){toast(e.message,true)}
+}
+async function flowRefreshAll(){
+ await refresh();toast('Đã tải lại dữ liệu cục bộ. Điểm Google Flow không được kiểm tra tự động.');
 }
 async function flowAddAccounts(){
  const mails=$('#flowEmailList')?.value||'';
