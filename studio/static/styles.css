@@ -223,3 +223,110 @@ html,body{max-width:100%}
 .flow-job .video-card-actions a.small-btn{display:inline-flex;align-items:center;text-decoration:none}
 @media(max-width:960px){.flow-account-inputs{grid-template-columns:repeat(2,minmax(0,1fr))}.flow-account-inputs button{width:100%}}
 @media(max-width:560px){.flow-account-inputs{grid-template-columns:1fr}.flow-balance b{font-size:19px}.flow-job .video-card-actions{flex-direction:column;align-items:stretch}.flow-job .video-card-actions>*{width:100%;justify-content:center}}
+
+
+/* Google Flow account screen: reference-style layout, scoped to the Flow view. */
+.flow-ui{display:grid;gap:10px;min-width:0;color:#d6dbe5;font-size:12px;line-height:1.45}
+.flow-ui *{box-sizing:border-box}
+.flow-surface,.flow-queue-details{background:#1c1f26;border:1px solid #363c48;border-radius:9px;min-width:0;overflow:hidden}
+.flow-section-header{background:#252a32;border-bottom:1px solid #39404c;padding:10px 14px;font-weight:750;color:#d6dbe5;min-height:36px}
+.flow-header-between{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.flow-header-between strong{font-size:12px}
+.flow-pad{padding:12px 14px}
+.flow-green-note{font-size:12px;color:#29d185;font-style:italic;margin:0 0 12px}
+.flow-green-note.small{font-size:11px;margin:13px 0 14px}
+.flow-proxy-bar{display:flex;align-items:center;gap:7px;margin-bottom:11px;flex-wrap:wrap}
+.flow-proxy-bar label{white-space:nowrap;color:#d0d5df}
+.flow-ui select,.flow-ui input[type=text],.flow-ui input[type=number],.flow-ui textarea{background:#2d333e;border:1px solid #3c4453;color:#e5ebf5;border-radius:6px;min-width:0;font-size:12px;min-height:34px;padding:8px 10px}
+.flow-ui input:disabled,.flow-ui select:disabled{color:#818c9b;opacity:.8}
+.flow-ui select{width:auto}
+.flow-proxy-bar select{flex:0 0 165px}
+.flow-proxy-bar input{flex:1 1 290px;max-width:340px}
+.flow-btn{border:0;border-radius:5px;font-size:12px;font-weight:700;min-height:30px;padding:7px 12px;white-space:nowrap;transition:filter .16s,background .16s}
+.flow-btn:hover:not(:disabled),.flow-mini:hover:not(:disabled){filter:brightness(1.15)}
+.flow-ui .flow-btn:focus-visible,.flow-ui .flow-mini:focus-visible,.flow-ui .flow-switch:focus-visible{outline:2px solid #85adff;outline-offset:2px}
+.flow-btn.blue{background:#2999d8;color:#fff}.flow-btn.purple{background:#943cb0;color:#fff}
+.flow-btn.orange{background:#ea7d17;color:#fff}.flow-btn.green{background:#1dae6b;color:#fff}
+.flow-btn.outline{background:transparent;border:2px solid #373e4a;color:#cdd4e0;padding:5px 10px}
+.flow-btn.wide{width:100%}
+.flow-btn:disabled{cursor:not-allowed;opacity:.58}
+.flow-add-cards{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:11px}
+.flow-add-card{border:1px solid #3b424e;border-radius:6px;padding:18px 19px 12px;min-height:168px;display:flex;flex-direction:column}
+.flow-add-card b{font-size:12px;color:#eef0f6}
+.flow-add-card>p:not(.flow-green-note){font-size:11px;line-height:1.55;margin:13px 0 10px;color:#c2c9d4}
+.flow-add-card input{width:100%;margin-top:auto;margin-bottom:4px}
+.flow-card-buttons{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:auto}
+.flow-add-inline{background:#232832;border:1px solid #3a4352;border-radius:7px;padding:12px;margin-top:10px}
+.flow-add-inline[hidden]{display:none!important}
+.flow-add-inline label{display:block;margin-bottom:6px;font-weight:700}
+.flow-add-inline textarea{min-height:57px;width:100%;max-height:190px}
+.flow-form-actions{display:flex;gap:7px;margin-top:8px}
+.flow-toolbar{display:flex;align-items:center;gap:10px;min-height:38px;flex-wrap:wrap;margin-bottom:8px}
+.flow-toolbar strong{margin:0 2px}
+.flow-toolbar label{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:#e1e6ef}
+.flow-toolbar label.flow-unsupported{color:#c2c8d1}
+.flow-toolbar input[type=checkbox],.flow-accounts-table input[type=checkbox]{accent-color:#34a8e4;width:16px;height:16px;cursor:not-allowed;flex-shrink:0}
+.flow-toolbar-space{flex:1 1 auto}
+.flow-ready-note{border:1px solid #039968;border-radius:6px;color:#26d39b;font-size:11px;padding:6px 11px;max-width:340px}
+.flow-table-scroll{max-width:100%;overflow-x:auto;overflow-y:visible;border:1px solid #3a414d;border-radius:5px;min-height:180px;overscroll-behavior-x:contain}
+.flow-accounts-table{width:100%;min-width:970px;border-collapse:separate;border-spacing:0;text-align:center;color:#d3d9e3}
+.flow-accounts-table th{padding:12px 8px;background:#232832;color:#d9dde5;font-size:12px;font-weight:750;white-space:nowrap;border-bottom:1px solid #3d4552}
+.flow-accounts-table td{height:51px;border-bottom:1px solid #3d4552;border-right:1px solid #3a414c;padding:6px 8px;vertical-align:middle;white-space:nowrap}
+.flow-accounts-table td:last-child{border-right:0}
+.flow-accounts-table tbody tr:last-child td{border-bottom:0}
+.flow-accounts-table tbody tr:hover td{background:#252b35}
+.flow-index{width:26px;font-weight:800}
+.flow-accounts-table td.flow-email{text-align:left;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.flow-plan{color:#a3b0c1}
+.flow-credit strong{color:#ffb000;display:block;font-weight:650;font-size:12px}
+.flow-credit small{display:block;font-size:10px;color:#8896a9}
+.flow-proxy{color:#b6beca}
+.flow-state{font-size:11px;color:#d8dee8;white-space:nowrap}
+.flow-state.off{color:#a1a9b7}.flow-state.stale{color:#edc27c}
+.flow-switch{display:inline-flex;justify-content:flex-start;align-items:center;width:51px;height:28px;border:0;border-radius:20px;background:#6c727b;padding:4px;vertical-align:middle}
+.flow-switch.is-on{background:#45b455;justify-content:flex-end}
+.flow-switch span{display:block;background:#f8fafc;height:20px;width:20px;border-radius:50%;box-shadow:0 1px 2px #0004}
+.flow-row-actions{position:relative;min-width:162px}
+.flow-mini{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;border:0;border-radius:5px;min-width:26px;height:29px;padding:4px 7px;font-size:11px;font-weight:800;text-decoration:none;color:#fff;margin:0 2px}
+.flow-mini.green{background:#16a869}.flow-mini.orange{background:#ed9a04}
+.flow-mini.blue{background:#349cdd}.flow-mini.red{background:#c83931}
+.flow-mini:disabled{opacity:.38;cursor:not-allowed}
+.flow-row-editor{display:none}
+.flow-row-editor[open]{display:block;position:absolute;z-index:12;right:5px;top:calc(100% - 4px);width:min(325px,80vw);padding:12px;background:#242b37;border:1px solid #637489;border-radius:8px;box-shadow:0 14px 35px #000b;text-align:left;white-space:normal}
+.flow-row-editor summary{display:none}
+.flow-row-editor-form{display:grid;grid-template-columns:1fr;gap:7px}
+.flow-row-editor-form input{width:100%}
+.flow-row-editor small{color:#adb9c8;display:block;margin-top:7px}
+.flow-empty{padding:32px 12px!important;color:#99aaba}
+.flow-disclaimer{font-size:11px;color:#9ba8b8;line-height:1.6;margin:9px 0 0}
+.flow-queue-details{margin-top:2px}
+.flow-queue-details>summary{padding:13px 15px;background:#252a32;cursor:pointer;font-weight:750}
+.flow-queue-details>summary span{float:right;font-weight:400;color:#a4b1be;margin-right:12px}
+.flow-queue-details .video-form-grid{margin:5px 0 9px}
+.flow-queue-details .field label{color:#bac9d9}
+.flow-queue-details .field select{width:100%}
+.flow-queue-details .video-card-actions{display:flex;flex-wrap:wrap;gap:8px}
+.flow-queue-details .flow-job-list{margin-top:12px}
+.flow-ui .flow-job{background:#242c35;border-color:#3d4755}
+@media(max-width:1160px){
+ .flow-proxy-bar input{flex:1 1 240px;max-width:none}
+ .flow-toolbar-space{flex-basis:15px}
+}
+@media(max-width:780px){
+ .flow-add-cards{grid-template-columns:minmax(0,1fr)}
+ .flow-add-card{min-height:148px}
+ .flow-header-between{align-items:flex-start}
+ .flow-proxy-bar label{width:100%}
+ .flow-toolbar{gap:8px}
+ .flow-toolbar-space{display:none}
+ .flow-ready-note{max-width:none;flex:1 1 100%}
+}
+@media(max-width:500px){
+ .flow-pad{padding:10px}
+ .flow-section-header{padding:10px}
+ .flow-proxy-bar select,.flow-proxy-bar input,.flow-proxy-bar button{flex:1 1 100%;max-width:none}
+ .flow-card-buttons{grid-template-columns:1fr 1fr}
+ .flow-add-card{padding:14px}
+ .flow-btn{font-size:11px}
+ .flow-queue-details>summary span{float:none;display:block;margin:4px 0 0}
+}
