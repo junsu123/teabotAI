@@ -33,6 +33,7 @@ import product_video_workflow
 import commerce_content
 import flow_accounts
 import flow_profiles
+import flow_enrollment
 import model_router
 import claude_provider
 import integration_settings
@@ -226,6 +227,10 @@ class Handler(BaseHTTPRequestHandler):
   if path=='/api/health':return json_reply(self,{'ok':True,'date':utc(),'version':'0.4.0','ceo_worker':'enabled'})
   if path=='/api/flow/profiles/reload-status':
    return json_reply(self,flow_profiles.reload_status())
+  if path=='/api/flow/enrollments/status':
+   enrollment_id=parse_qs(urlparse(self.path).query).get('id',[''])[0]
+   try:return json_reply(self,flow_enrollment.get_status(enrollment_id))
+   except ValueError as exc:return error_reply(self,400,str(exc))
   if path=='/api/agent-forum':
    try:
     raw=parse_qs(urlparse(self.path).query).get('mission_id',[''])[0]
@@ -470,6 +475,8 @@ class Handler(BaseHTTPRequestHandler):
     if not (TRAIN_DIR/(sid+'.status.json')).exists():raise ValueError('Không tìm thấy phiên học')
     (TRAIN_DIR/(sid+'.stop')).touch()
     return json_reply(self,{'ok':True,'message':'Đã yêu cầu lưu và dừng phiên học'})
+   if path=='/api/flow/enrollments/start':
+    return json_reply(self,flow_enrollment.start(DB))
    if path=='/api/flow/accounts/add':
     emails=body.get('emails','')
     result=flow_accounts.add_accounts(DB,emails)
