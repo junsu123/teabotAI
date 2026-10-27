@@ -149,6 +149,69 @@ def scene_instructions(base,product,ingredients):
       "tên, màu, chữ, logo, nhãn/bao bì, KHÔNG dựng lại chữ. "
       "Không bịa cam kết sức khỏe, chứng nhận, giá đối thủ hoặc review.")
 
+def create_sample_script(product_name, ingredients, base_prompt, chat):
+    """Generate a non-persisted sample video script through AI CEO only.
+
+    Explicit UI click triggers this paid/quota-bearing call. We validate five
+    8-second scenes instead of showing fabricated scenes on malformed output.
+    """
+    if not isinstance(product_name,str) or not 2<=len(product_name.strip())<=180:
+        raise ValueError("Nhập tên sản phẩm (2–180 ký tự)")
+    if not isinstance(ingredients,str) or not 2<=len(ingredients.strip())<=2500:
+        raise ValueError("Nhập thành phần sản phẩm (2–2.500 ký tự)")
+    if not isinstance(base_prompt,str) or len(base_prompt)>16000:
+        raise ValueError("Prompt mẫu tối đa 16.000 ký tự")
+    if not callable(chat):
+        raise ValueError("Chưa kết nối AI CEO")
+    name=product_name.strip()
+    parts=ingredients.strip()
+    instruction=(
+        "VEO3_5_SCENES_STRUCTURED\n"
+        "BẠN LÀ AI CEO, nhận trực tiếp yêu cầu TẠO KỊCH BẢN MẪU của chủ doanh nghiệp. "
+        "Hãy tạo bản thử nghiệm bán hàng 40 giây dựa trên mẫu prompt gốc. "
+        "Không tự nhận đã gửi công việc sang agent khác hoặc đã tạo MP4.\n"
+        "Mỗi cảnh gồm 8 giây (5 cảnh x 8 = 40 giây). Khởi đầu có hook hấp dẫn, "
+        "sau đó giới thiệu sản phẩm, thành phần, trải nghiệm/cách sử dụng chỉ nếu đã "
+        "có dữ liệu, slogan trung thực và CTA phù hợp. "
+        "Lời thoại mỗi cảnh ngắn, nói được trong 8 giây, dùng tiếng Việt tự nhiên. "
+        "Không bịa đặc tính, công dụng sức khỏe, giấy chứng nhận, "
+        "giá khuyến mại, đánh giá khách hàng; thêm chữ 'hỗ trợ' không đủ "
+        "để hợp thức hóa tuyên bố sức khỏe. "
+        "Nếu cần ảnh sản phẩm trong video, yêu cầu dùng ảnh/nhãn gốc, "
+        "không thay đổi chữ, logo hay bao bì. "
+        "Đây chỉ là BẢN NHÁP MẪU cho người chủ duyệt, chưa được phê duyệt đăng bán.\n"
+        "TÊN SẢN PHẨM: "+name+"\nTHÀNH PHẦN (người dùng tự khai, chưa xác minh): "+parts+"\n"
+        +scene_instructions(base_prompt.strip(),name,parts)+
+        "\nQuy định nội dung: mỗi phần tử scenes ngoài scene/duration_seconds/"
+        "veo_prompt/dialogue phải có action (mô tả hành động/khung hình cụ thể "
+        "cho cảnh), dùng từ ngữ có thể sản xuất được. "
+        "Hãy chỉ trả một JSON hoàn chỉnh không markdown. "
+        "Mỗi cảnh là một prompt Veo 3 độc lập, liên tục đồng nhất khi ghép clip."
+    )
+    raw=chat("ceo",instruction)
+    if not isinstance(raw,str) or len(raw)>30000:
+        raise ValueError("Phản hồi AI CEO không đúng định dạng cho kịch bản mẫu")
+    parsed=parse_five_scenes(raw)
+    # Require a visual/action plan, not just five prompts without scenes.
+    try:
+        text=raw.strip()
+        tick=chr(96)*3
+        if text.startswith(tick):
+            text=re.sub(r"^\s*"+re.escape(tick)+r"(?:json)?\s*|\s*"+
+                        re.escape(tick)+r"\s*$","",text,flags=re.I)
+        obj=json.loads(text)
+        for i,scene in enumerate(obj["scenes"]):
+            action=scene.get("action","")
+            if not isinstance(action,str) or not 8<=len(action.strip())<=1600:
+                raise ValueError("Cảnh "+str(i+1)+" thiếu mô tả hành động kịch bản")
+            parsed[i]["action"]=action.strip()
+    except (TypeError,KeyError,IndexError) as error:
+        raise ValueError("Bản nháp thiếu phân cảnh; hãy bấm Tạo lại kịch bản mẫu") from None
+    return {"ok":True,"product_name":name,"duration_seconds":40,"scenes":parsed,
+            "message":"AI CEO đã tạo kịch bản mẫu 5 cảnh x 8 giây để bạn xem và sao chép. "
+                      "Đây là bản nháp, chưa được kiểm duyệt hay dựng video."}
+
+
 def price_rules():
     return ("CHỈ báo giá thị trường nếu có bằng chứng URL/địa điểm, con số "
       "và ngày kiểm tra do nguồn thực tế cung cấp. Không có kết nối khảo sát giá "
