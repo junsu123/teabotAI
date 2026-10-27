@@ -150,7 +150,9 @@ def list_profiles(db_path, profiles_dir=None):
                 doc = json.loads(f.read_text(encoding="utf-8"))
                 if isinstance(doc, dict) and doc.get("status") in {
                     "created", "opening", "open", "closed", "error",
-                    "checking_credits", "credits_updated", "credits_unavailable"
+                    "checking_credits", "credits_updated", "credits_unavailable",
+                    "signin_pending", "signin_verifying", "signin_wrong_account",
+                    "signin_captured", "signin_timeout", "signin_unmonitored"
                 }:
                     status = doc["status"]
                     message = str(doc.get("message") or "")[:180]
@@ -165,7 +167,7 @@ def list_profiles(db_path, profiles_dir=None):
     return out
 
 
-def _launch_for_profile(db_path, info, profiles_dir=None):
+def _launch_for_profile(db_path, info, profiles_dir=None, login_monitor=False):
     """Reserve the profile before spawning to avoid duplicate Chrome writers."""
     root = Path(profiles_dir) if profiles_dir is not None else PROFILES
     folder = info["folder"]
@@ -187,7 +189,8 @@ def _launch_for_profile(db_path, info, profiles_dir=None):
                       (now(), info["email"]))
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
         subprocess.Popen(
-            [sys.executable, str(Path(__file__).resolve()), "open-worker",
+            [sys.executable, str(Path(__file__).resolve()),
+             "login-worker" if login_monitor else "open-worker",
              str(Path(db_path).resolve()), info["email"], token, str(root.resolve())],
             cwd=str(ROOT),
             creationflags=flags,
@@ -196,7 +199,8 @@ def _launch_for_profile(db_path, info, profiles_dir=None):
             close_fds=True,
         )
         return {"ok": True, "email": info["email"], "profile_id": info["profile_id"],
-                "message": "Đã yêu cầu mở Chrome profile riêng. Đăng nhập Google thủ công nếu cần."}
+                "message": ("Đang mở Chrome để đăng nhập; khi xác minh đúng Gmail và điểm, profile sẽ tự đóng."
+                            if login_monitor else "Đã yêu cầu mở Chrome profile riêng. Đăng nhập Google thủ công nếu cần.")}
     except Exception:
         lock.unlink(missing_ok=True)
         _write_status(folder, "error", "Không khởi chạy được trình duyệt Flow")
@@ -205,6 +209,12 @@ def _launch_for_profile(db_path, info, profiles_dir=None):
 
 def launch_for_email(db_path, email, profiles_dir=None):
     return _launch_for_profile(db_path, ensure_profile(db_path, email, profiles_dir), profiles_dir)
+
+
+def launch_login_for_email(db_path, email, profiles_dir=None):
+    return _launch_for_profile(
+        db_path, ensure_profile(db_path, email, profiles_dir),
+        profiles_dir, login_monitor=True)
 
 
 def launch_for_job(db_path, job_id, profiles_dir=None):
@@ -564,11 +574,57 @@ def browser_worker(db_path, email, token, profiles_dir=None):
             pass
 
 
+def login_worker(db_path, email, token, profiles_dir=None):
+    """Visible Chrome sign-in, read displayed Flow credits and close on success."""
+    info = ensure_profile(db_path, email, profiles_dir)
+    folder = info["folder"]
+    lock = folder / LOCK_NAME
+    if not ID_RE.fullmatch(token) or not lock.is_file() or lock.read_text(encoding="utf-8") != token:
+        raise RuntimeError("Khóa Chrome profile không hợp lệ")
+    try:
+        from playwright.sync_api import sync_playwright
+        from flow_login import observe_login
+        _write_status(folder, "signin_pending", "Đang mở Chrome và chờ bạn đăng nhập Google.")
+        with sync_playwright() as playwright:
+            context = playwright.chromium.launch_persistent_context(
+                user_data_dir=str(folder), channel="chrome", headless=False,
+                accept_downloads=False, viewport={"width": 1400, "height": 900})
+            completed = False
+            try:
+                page = context.pages[0] if context.pages else context.new_page()
+                page.goto(FLOW_URL, wait_until="domcontentloaded", timeout=60000)
+                completed = observe_login(
+                    context, db_path, email,
+                    lambda status, message: _write_status(folder, status, message))
+            finally:
+                # On success close browser and leave the Chrome-owned session
+                # intact. On failure manual login is not reported as verified.
+                context.close()
+        if completed:
+            _write_status(folder, "credits_updated",
+                          "Đã xác minh Gmail, lưu tín dụng; Chrome đã đóng. Phiên do Chrome lưu.")
+        else:
+            _write_status(folder, "closed",
+                          "Chưa xác minh tự động được tài khoản hoặc số tín dụng.")
+    except Exception as exc:
+        _write_status(folder, "signin_unmonitored",
+                      "Không theo dõi được đăng nhập (" + type(exc).__name__ +
+                      "). Vui lòng mở profile bằng nút ◎ để đăng nhập thủ công.")
+    finally:
+        try:
+            if lock.read_text(encoding="utf-8") == token:
+                lock.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 6 or sys.argv[1] not in ("open-worker", "credits-worker"):
+    if len(sys.argv) != 6 or sys.argv[1] not in ("open-worker", "login-worker", "credits-worker"):
         raise SystemExit("Only the local dashboard can start a Flow profile worker")
     args = (Path(sys.argv[2]), sys.argv[3], sys.argv[4], Path(sys.argv[5]))
     if sys.argv[1] == "open-worker":
         browser_worker(*args)
+    elif sys.argv[1] == "login-worker":
+        login_worker(*args)
     else:
         credit_worker(*args)
